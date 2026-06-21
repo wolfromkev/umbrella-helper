@@ -130,9 +130,7 @@ final class AppModel: ObservableObject {
 
     func preloadStartupData() {
         preloadWorkspaceSessions()
-        if isNotionConfigured {
-            loadNotionSchema()
-        }
+        // Notion schema (and keychain token read) loads on first F6 / Settings use — not at launch.
     }
 
     func refreshWorkspaceSessionCache() {
@@ -711,7 +709,9 @@ final class AppModel: ObservableObject {
     func openInCursorAgent() {
         CursorLauncher.openInCursorAgent(
             workspace: activeWorkspacePath,
-            messages: messages
+            messages: messages,
+            sessionID: sessionID,
+            handoffMode: settings.cursorHandoffMode
         )
     }
 }

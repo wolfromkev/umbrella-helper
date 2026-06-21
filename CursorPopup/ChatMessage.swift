@@ -40,3 +40,19 @@ enum ResponseDisplayMode: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum CursorHandoffMode: String, CaseIterable, Identifiable {
+    case formattedHistory
+    case lastQuestion
+    case fullTranscript
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .formattedHistory: return "Formatted history"
+        case .lastQuestion: return "Last question only"
+        case .fullTranscript: return "Full transcript"
+        }
+    }
+}

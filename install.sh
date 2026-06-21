@@ -15,8 +15,6 @@ xcodebuild \
   -scheme "$SCHEME" \
   -configuration Release \
   -derivedDataPath "$DERIVED" \
-  CODE_SIGN_IDENTITY="-" \
-  CODE_SIGNING_ALLOWED=YES \
   build
 
 BUILT_APP="$DERIVED/Build/Products/Release/$APP_NAME.app"

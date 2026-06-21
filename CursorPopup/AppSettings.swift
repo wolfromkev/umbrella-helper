@@ -159,6 +159,7 @@ final class AppSettings {
         static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
         static let responseDisplayMode = "responseDisplayMode"
+        static let cursorHandoffMode = "cursorHandoffMode"
         static let playResponseSound = "playResponseSound"
         static let responseCompletionSound = "responseCompletionSound"
         static let showMenuBarIcon = showMenuBarIconKey
@@ -308,6 +309,21 @@ final class AppSettings {
 
     var usesFloatingChatBox: Bool {
         responseDisplayMode == .floatingChat
+    }
+
+    var cursorHandoffMode: CursorHandoffMode {
+        get {
+            guard
+                let raw = UserDefaults.standard.string(forKey: Keys.cursorHandoffMode),
+                let mode = CursorHandoffMode(rawValue: raw)
+            else {
+                return .formattedHistory
+            }
+            return mode
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Keys.cursorHandoffMode)
+        }
     }
 
     var playResponseSound: Bool {

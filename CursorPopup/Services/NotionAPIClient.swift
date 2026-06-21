@@ -184,11 +184,15 @@ final class NotionAPIClient {
             statusProperty: statusProperty,
             defaultStatus: defaultStatus,
             categoryProperty: categoryProperty,
-            categoryOptions: categoryOptions,
+            categoryOptions: Self.sortedSelectOptions(categoryOptions),
             priorityProperty: priorityProperty,
-            priorityOptions: priorityOptions,
+            priorityOptions: Self.sortedSelectOptions(priorityOptions),
             dueDateProperty: dueDateProperty
         )
+    }
+
+    private static func sortedSelectOptions(_ options: [String]) -> [String] {
+        options.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     private func selectOptions(from property: [String: Any]) -> [String] {

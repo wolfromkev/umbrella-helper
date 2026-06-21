@@ -3,9 +3,19 @@ import Foundation
 
 enum CursorLauncher {
     private static let cursorAppPath = "/Applications/Cursor.app"
+    private static let maxDeeplinkLength = 8_000
 
-    static func openInCursorAgent(workspace: String, messages: [ChatMessage]) {
-        let prompt = buildHandoffPrompt(from: messages)
+    static func openInCursorAgent(
+        workspace: String,
+        messages: [ChatMessage],
+        sessionID: String? = nil,
+        handoffMode: CursorHandoffMode = .formattedHistory
+    ) {
+        let prompt = buildHandoffPrompt(
+            from: messages,
+            sessionID: sessionID,
+            handoffMode: handoffMode
+        )
 
         if runCursorCLI(arguments: ["--glass", "-n", workspace]) {
             handoffPrompt(prompt, delay: 0.45)
@@ -74,7 +84,11 @@ enum CursorLauncher {
         }
     }
 
-    private static func buildHandoffPrompt(from messages: [ChatMessage]) -> String {
+    static func buildHandoffPrompt(
+        from messages: [ChatMessage],
+        sessionID: String? = nil,
+        handoffMode: CursorHandoffMode = .formattedHistory
+    ) -> String {
         let trimmedMessages = messages.filter {
             !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
@@ -85,12 +99,81 @@ enum CursorLauncher {
             return only.text
         }
 
-        let transcript = trimmedMessages.map { message in
+        let prompt: String
+        switch handoffMode {
+        case .lastQuestion:
+            prompt = buildLastQuestionHandoff(from: trimmedMessages, sessionID: sessionID)
+        case .fullTranscript:
+            prompt = buildLegacyTranscriptHandoff(from: trimmedMessages)
+        case .formattedHistory:
+            prompt = buildFormattedHistoryHandoff(from: trimmedMessages, sessionID: sessionID)
+        }
+
+        return trimForDeeplink(prompt)
+    }
+
+    private static func buildLastQuestionHandoff(
+        from messages: [ChatMessage],
+        sessionID: String?
+    ) -> String {
+        guard let lastUser = messages.last(where: { $0.role == .user }) else {
+            return buildFormattedHistoryHandoff(from: messages, sessionID: sessionID)
+        }
+
+        var lines = [
+            "Continuing from Cursor Popup.",
+            "",
+            lastUser.text,
+        ]
+
+        if let sessionID {
+            lines.append("")
+            lines.append("_Popup session: \(sessionID)_")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func buildFormattedHistoryHandoff(
+        from messages: [ChatMessage],
+        sessionID: String?
+    ) -> String {
+        var lines = [
+            "Please continue this conversation from Cursor Popup.",
+            "",
+        ]
+
+        for message in messages {
+            let heading = message.role == .user ? "### You" : "### Assistant"
+            lines.append(heading)
+            lines.append("")
+            lines.append(message.text)
+            lines.append("")
+        }
+
+        if let sessionID {
+            lines.append("_Popup session: \(sessionID)_")
+        }
+
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func buildLegacyTranscriptHandoff(from messages: [ChatMessage]) -> String {
+        let transcript = messages.map { message in
             let speaker = message.role == .user ? "Me" : "Assistant"
             return "\(speaker): \(message.text)"
         }.joined(separator: "\n\n")
 
         return "Continue this conversation from Cursor Popup:\n\n\(transcript)"
+    }
+
+    private static func trimForDeeplink(_ prompt: String) -> String {
+        guard prompt.count > maxDeeplinkLength else { return prompt }
+
+        let suffix = "\n\n[Truncated for Cursor deeplink length limit.]"
+        let maxBodyLength = max(0, maxDeeplinkLength - suffix.count)
+        let end = prompt.index(prompt.startIndex, offsetBy: maxBodyLength)
+        return String(prompt[..<end]).trimmingCharacters(in: .whitespacesAndNewlines) + suffix
     }
 
     private static func locateCursorCLI() -> String? {

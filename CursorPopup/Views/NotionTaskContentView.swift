@@ -302,8 +302,54 @@ struct NotionTaskContentView: View {
             return event
 
         default:
+            if let focusedMetadataField,
+               let typedLetter = Self.typedLetter(from: event) {
+                switch focusedMetadataField {
+                case .category:
+                    selectFirstOption(
+                        startingWith: typedLetter,
+                        options: schema.categoryOptions,
+                        selection: \.notionSelectedCategory
+                    )
+                    return nil
+                case .priority:
+                    selectFirstOption(
+                        startingWith: typedLetter,
+                        options: schema.priorityOptions,
+                        selection: \.notionSelectedPriority
+                    )
+                    return nil
+                case .dueDate:
+                    break
+                }
+            }
             return event
         }
+    }
+
+    private static func typedLetter(from event: NSEvent) -> Character? {
+        guard
+            !event.modifierFlags.contains(.command),
+            !event.modifierFlags.contains(.control),
+            !event.modifierFlags.contains(.option),
+            let characters = event.charactersIgnoringModifiers,
+            characters.count == 1,
+            let character = characters.first,
+            character.isLetter
+        else {
+            return nil
+        }
+        return character
+    }
+
+    private func selectFirstOption(
+        startingWith letter: Character,
+        options: [String],
+        selection: ReferenceWritableKeyPath<AppModel, String>
+    ) {
+        let prefix = String(letter).lowercased()
+        guard let match = options.first(where: { $0.lowercased().hasPrefix(prefix) }) else { return }
+        model[keyPath: selection] = match
     }
 
     private func focusTaskField() {
@@ -478,6 +524,12 @@ private struct MetadataFieldFocusModifier: ViewModifier {
             .offset(y: isFocused ? -1 : 0)
             .animation(.easeOut(duration: 0.14), value: isFocused)
             .contentShape(Rectangle())
+            .onHover { isHovering in
+                if isHovering {
+                    taskFocused.wrappedValue = false
+                    focusedField = field
+                }
+            }
             .onTapGesture {
                 taskFocused.wrappedValue = false
                 focusedField = field

@@ -4,6 +4,7 @@ import Security
 enum KeychainStorage {
     private static let notionTokenService = "com.cursorpopup.notion-token"
     private static let notionTokenAccount = "default"
+    private static let notionTokenLabel = "Cursor Popup Notion Token"
 
     static var notionToken: String? {
         get { read(service: notionTokenService, account: notionTokenAccount) }
@@ -30,11 +31,13 @@ enum KeychainStorage {
 
         guard let data = value.data(using: .utf8) else { return }
 
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrLabel as String: notionTokenLabel,
             kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
 
         SecItemAdd(query as CFDictionary, nil)

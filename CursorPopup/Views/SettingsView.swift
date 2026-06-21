@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var notionTokenDraft = ""
     @State private var notionDatabaseIDDraft = ""
     @State private var responseDisplayMode = AppSettings.shared.responseDisplayMode
+    @State private var cursorHandoffMode = AppSettings.shared.cursorHandoffMode
     @State private var recordingTarget: ShortcutTarget?
     @State private var shortcutConflict: String?
     @State private var accessibilityGranted = SystemPermissions.isAccessibilityGranted
@@ -72,6 +73,21 @@ struct SettingsView: View {
                     }
 
                     footerText("Floating chat opens a separate window you can drag and keep open while you work. Inline mode shows replies above the input bar.")
+
+                    settingsRow("Open in Cursor") {
+                        Picker("", selection: $cursorHandoffMode) {
+                            ForEach(CursorHandoffMode.allCases) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 240)
+                        .onChange(of: cursorHandoffMode) { newValue in
+                            AppSettings.shared.cursorHandoffMode = newValue
+                        }
+                    }
+
+                    footerText("Popup chats run through the headless agent CLI and do not appear in Cursor's chat sidebar. Open in Cursor hands the conversation off via deeplink. Formatted history is the cleanest default; use Last question only for a short follow-up.")
                 }
 
                 settingsSection("Sounds") {
@@ -257,7 +273,7 @@ struct SettingsView: View {
                 }
 
                 settingsSection("About") {
-                    footerText("Cursor Popup sends questions to the Cursor agent in ask mode against your configured workspace folder. Each popup opens a fresh chat; follow-ups continue that session.")
+                    footerText("Cursor Popup sends questions to the Cursor agent in ask mode against your configured workspace folder. Each popup opens a fresh chat; follow-ups continue that session. Full popup history is available in the popup via ↑ / ↓.")
                 }
 
                 HStack(spacing: 10) {
