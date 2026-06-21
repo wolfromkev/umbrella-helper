@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 extension View {
@@ -50,96 +49,29 @@ struct WorkspaceNavigatorView: View {
     }
 }
 
-@MainActor
-private final class LoadingPhaseClock: ObservableObject {
-    @Published var phase: TimeInterval = 0
-    private var cancellable: AnyCancellable?
-
-    func start() {
-        guard cancellable == nil else { return }
-        phase = Date().timeIntervalSinceReferenceDate
-        cancellable = Timer.publish(every: 1.0 / 30, tolerance: 0.01, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] date in
-                self?.phase = date.timeIntervalSinceReferenceDate
-            }
-    }
-
-    func stop() {
-        cancellable?.cancel()
-        cancellable = nil
-    }
-}
-
-private struct AnimatedLoadingPhase<Content: View>: View {
-    @StateObject private var clock = LoadingPhaseClock()
-    @ViewBuilder var content: (TimeInterval) -> Content
-
-    var body: some View {
-        content(clock.phase)
-            .onAppear { clock.start() }
-            .onDisappear { clock.stop() }
-    }
-}
-
-struct PencilPulseView: View {
-    var size: CGFloat = 18
-    var phase: TimeInterval
-
-    var body: some View {
-        let pulse = (sin(phase * 3) + 1) / 2
-
-        GeometricPencilShape()
-            .fill(Color.white.opacity(0.55 + pulse * 0.35))
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(sin(phase * 2.5) * 6))
-            .accessibilityHidden(true)
-    }
-}
-
-private struct BouncingDotsView: View {
-    var dotSize: CGFloat
-    var dotColor: Color
-    var phase: TimeInterval
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: dotSize, height: dotSize)
-                    .offset(y: CGFloat(sin(phase * 5 + Double(index) * 1.2)) * 4)
-            }
-        }
-        .frame(width: dotSize * 3 + 10, height: dotSize + 10)
-    }
-}
-
 struct ThinkingIndicatorView: View {
-    var label: String? = "Thinking…"
-    var dotSize: CGFloat = 6
-    var dotColor: Color = .secondary
-    var showsPencil: Bool = false
+    var size: CGFloat = 18
+    var lineWidth: CGFloat = 2
+    var color: Color = Color.white.opacity(0.72)
+
+    @State private var isSpinning = false
 
     var body: some View {
-        AnimatedLoadingPhase { phase in
-            HStack(spacing: 10) {
-                if showsPencil {
-                    PencilPulseView(size: 18, phase: phase)
-                }
-
-                BouncingDotsView(dotSize: dotSize, dotColor: dotColor, phase: phase)
-
-                if let label {
-                    Text(label)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(minWidth: showsPencil ? 132 : 92, minHeight: 28, alignment: .leading)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label ?? "Thinking")
+        Circle()
+            .trim(from: 0.12, to: 0.88)
+            .stroke(
+                color,
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(isSpinning ? 360 : 0))
+            .animation(
+                .linear(duration: 0.85).repeatForever(autoreverses: false),
+                value: isSpinning
+            )
+            .onAppear { isSpinning = true }
+            .onDisappear { isSpinning = false }
+            .accessibilityLabel("Loading")
     }
 }
 

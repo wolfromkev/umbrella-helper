@@ -384,7 +384,9 @@ final class AppModel: ObservableObject {
     }
 
     var canSubmitPrompt: Bool {
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        let hasPrompt = !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        let hasWorkspace = !activeWorkspacePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return hasPrompt && hasWorkspace
     }
 
     func reloadSavedSessions(forceReload: Bool = false) {
@@ -625,6 +627,15 @@ final class AppModel: ObservableObject {
             } else if isVisible {
                 panelController.resizeToFitContent()
             }
+        case .textFinal(let text):
+            replaceStreamingAssistantText(text)
+            if settings.usesFloatingChatBox {
+                if isChatBoxVisible {
+                    chatPanelController.resizeToFitContent()
+                }
+            } else if isVisible {
+                panelController.resizeToFitContent()
+            }
         case .completed:
             finishStreamingAssistant()
             isLoading = false
@@ -652,6 +663,15 @@ final class AppModel: ObservableObject {
               let index = messages.firstIndex(where: { $0.id == streamingAssistantID }) else { return }
         var updated = messages[index]
         updated.text += delta
+        updated.text = AssistantMessageFormatter.displayText(from: updated.text)
+        messages[index] = updated
+    }
+
+    private func replaceStreamingAssistantText(_ text: String) {
+        guard let streamingAssistantID,
+              let index = messages.firstIndex(where: { $0.id == streamingAssistantID }) else { return }
+        var updated = messages[index]
+        updated.text = AssistantMessageFormatter.displayText(from: text)
         messages[index] = updated
     }
 
@@ -684,7 +704,8 @@ final class AppModel: ObservableObject {
     }
 
     var latestAssistantText: String {
-        messages.last(where: { $0.role == .assistant })?.text ?? ""
+        guard let text = messages.last(where: { $0.role == .assistant })?.text else { return "" }
+        return AssistantMessageFormatter.displayText(from: text)
     }
 
     func openInCursorAgent() {

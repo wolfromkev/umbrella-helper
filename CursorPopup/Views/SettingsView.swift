@@ -169,7 +169,7 @@ struct SettingsView: View {
                         .padding(.top, 2)
                     }
 
-                    footerText("Creates tasks in your Project Tracker database. Category, priority, and due date options are loaded live from Notion when you open the task popup.")
+                    footerText("Creates tasks in your Notion tasks database. Category, priority, and due date options are loaded from Notion when you open the task popup.")
                 }
 
                 settingsSection("Shortcuts") {
@@ -257,7 +257,7 @@ struct SettingsView: View {
                 }
 
                 settingsSection("About") {
-                    footerText("Cursor Popup sends questions to the Cursor agent in ask mode against your Cursor Chat workspace. Each popup opens a fresh chat; follow-ups continue that session.")
+                    footerText("Cursor Popup sends questions to the Cursor agent in ask mode against your configured workspace folder. Each popup opens a fresh chat; follow-ups continue that session.")
                 }
 
                 HStack(spacing: 10) {

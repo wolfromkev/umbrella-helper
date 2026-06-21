@@ -15,13 +15,9 @@ struct PopupContentView: View {
                 inlineResponseSection
                 Divider().opacity(0.08)
             } else if model.usesFloatingChatBox && model.isLoading {
-                ThinkingIndicatorView(
-                    label: "Opening chat…",
-                    dotColor: Color.white.opacity(0.72),
-                    showsPencil: true
-                )
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+                ThinkingIndicatorView()
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
             }
 
             inputBar
@@ -94,21 +90,13 @@ struct PopupContentView: View {
     private var inlineResponseSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if model.isLoading && model.latestAssistantText.isEmpty {
-                ThinkingIndicatorView(
-                    label: "Thinking…",
-                    dotColor: Color.white.opacity(0.72),
-                    showsPencil: true
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+                ThinkingIndicatorView()
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !model.latestAssistantText.isEmpty {
                 ScrollView {
-                    Text(model.latestAssistantText)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                    MarkdownMessageText(text: model.latestAssistantText, fontSize: 15)
                 }
                 .frame(maxHeight: 320)
             }

@@ -213,13 +213,10 @@ struct FloatingChatView: View {
                     MessageImageStrip(imagePaths: message.imagePaths)
                 }
 
-                if message.role == .assistant && message.text.isEmpty && (message.isStreaming || model.isLoading) {
-                    ThinkingIndicatorView(
-                        label: "Thinking…",
-                        dotSize: 7,
-                        dotColor: Color.white.opacity(0.72),
-                        showsPencil: true
-                    )
+                if message.role == .assistant && displayText(for: message).isEmpty && (message.isStreaming || model.isLoading) {
+                    ThinkingIndicatorView()
+                } else if message.role == .assistant, !displayText(for: message).isEmpty {
+                    MarkdownMessageText(text: displayText(for: message), fontSize: 14)
                 } else if !message.text.isEmpty {
                     Text(message.text)
                         .font(.system(size: 14))
@@ -242,6 +239,11 @@ struct FloatingChatView: View {
 
             if message.role == .assistant { Spacer(minLength: 40) }
         }
+    }
+
+    private func displayText(for message: ChatMessage) -> String {
+        guard message.role == .assistant else { return message.text }
+        return AssistantMessageFormatter.displayText(from: message.text)
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool = true) {

@@ -169,15 +169,12 @@ final class AppSettings {
     static let permissionsAutomationDoneKey = Keys.permissionsAutomationDone
     static let permissionsLoginItemsDoneKey = Keys.permissionsLoginItemsDone
 
-    static let defaultWorkspace = "~/Cursor Chat"
-    static let defaultNotionDatabaseID = "[redacted-notion-id]"
+    static let defaultWorkspace = ""
+    static let defaultNotionDatabaseID = ""
     static let notionDefaultStatus = "Not started"
 
     func bootstrapNotionConfiguration() {
         KeychainStorage.seedBootstrapCredentialsIfNeeded()
-        if notionDatabaseID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            notionDatabaseID = Self.defaultNotionDatabaseID
-        }
     }
 
     var workspaceFolders: [String] {
@@ -189,7 +186,8 @@ final class AppSettings {
             }
 
             let legacy = UserDefaults.standard.string(forKey: Keys.workspacePath) ?? Self.defaultWorkspace
-            return [legacy]
+            let trimmed = legacy.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? [] : [trimmed]
         }
         set {
             let trimmed = newValue

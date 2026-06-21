@@ -4,70 +4,90 @@
   <img src="branding/icon-1024.png" alt="Cursor Popup logo" width="128" height="128">
 </p>
 
-A native macOS floating chat bar (Claude-style) that sends general questions to your **Cursor Chat** workspace via the Cursor `agent` CLI.
+A native macOS menu bar app that opens a floating chat bar and sends prompts to the **Cursor `agent` CLI** in ask mode against a workspace folder you choose.
+
+> **Disclaimer:** Unofficial companion app. Not affiliated with or endorsed by Cursor or Anysphere. “Cursor” is a trademark of its respective owner.
 
 ## Features
 
 - **Global hotkey:** `F5` toggles the chat box (customizable in Settings)
-- **Claude-like UI:** dark pill input bar, orange send button, streaming response below
-- **Cursor Chat workspace:** questions run in ask mode against `~/Cursor Chat`
-- **New chat per popup:** each time you open the popup, you get a fresh session; follow-ups in the same popup continue that chat
-- **Launch at login:** enabled by default on first run
-- **Menu bar:** logo icon for Show Popup, Toggle Chat, Settings, Restart, and Quit
-- **Shortcuts:** `F5` chat box toggle · `↑↓` browse chat history
-- **Response modes (Settings):**
-  - **Expand below input bar** — default; replies stream under the pill
-  - **Floating chat window** — opens a separate draggable chat panel (bottom-right) with full message history and follow-ups
+- **Floating or inline chat:** stream replies in a separate panel or below the input bar
+- **Workspace folders:** point at any project directory; use `←` / `→` in the chat bar to switch
+- **Chat history:** `↑` / `↓` browse past sessions (loaded from Cursor agent transcripts)
+- **Optional Notion quick task:** `F6` opens a compact task capture popup (integration token + database ID in Settings)
+- **Menu bar:** show popup, toggle chat, settings, restart, quit
+- **Markdown replies:** assistant messages render markdown; CLI status lines are hidden while thinking
 
 ## Requirements
 
-- macOS 13+
-- Cursor agent CLI (`agent`) installed and logged in (`agent login`)
-- Xcode (to build)
+- macOS 13 (Ventura) or later
+- [Cursor](https://cursor.com) with the **`agent` CLI** installed and logged in (`agent login`)
+- Xcode (to build from source)
 
 ## Install
 
 ```bash
-cd "~/path/to/umbrella-helper"
+git clone <your-repo-url>
+cd CursorPopup
 chmod +x install.sh
 ./install.sh
 ```
 
-This builds the app, copies it to `/Applications/Cursor Popup.app`, and registers launch at login.
+Or build, install, and relaunch in one step:
+
+```bash
+./build-and-install.sh
+```
+
+The script builds a Release app, copies it to `/Applications/Cursor Popup.app`, and uses ad-hoc code signing. On first launch, macOS may block an unsigned build — right-click the app → **Open**, or allow it in **Privacy & Security**.
+
+## First-time setup
+
+1. Launch **Cursor Popup** from Applications.
+2. Open **Settings** (gear in the chat bar or menu bar icon).
+3. Under **Workspace**, click **Add folder…** and choose the project directory you want the agent to use.
+4. Under **Permissions**, enable **Accessibility** for Cursor Popup (needed for popup placement and click-outside dismiss).
+5. *(Optional)* Under **Notion**, add an [integration token](https://www.notion.so/my-integrations) and your tasks database ID. See [docs/NOTION.md](docs/NOTION.md).
+
+Default shortcuts: **F5** chat · **F6** Notion task (both configurable).
 
 ## Usage
 
-1. Press **F5** (or your configured chat box shortcut) anywhere to open the chat box
-2. Type your question and press **Return** or click the arrow button
-3. Press **Escape** to dismiss
-4. Open **Settings** from the menu bar logo to change the workspace path or toggle launch at login
-
-## Branding
-
-Open-source-ready assets live in `branding/`:
-
-| File | Use |
-|------|-----|
-| `logo.svg` | README, docs, website |
-| `icon-1024.png` | App Store–style master icon |
-
-The in-app mark uses the same pill + orange send-button motif as the UI.
+1. Press **F5** (or your chat shortcut) to open the chat bar.
+2. Type a question and press **Return**, or click the send button.
+3. Press **Escape** to dismiss.
+4. Use **↑** / **↓** for chat history and **←** / **→** to change workspace when multiple folders are configured.
 
 ## How it works
 
-The app spawns the Cursor agent in headless ask mode:
+The app runs the Cursor agent CLI in headless ask mode, for example:
 
 ```bash
-agent -p --mode ask --workspace "~/Cursor Chat" \
+agent -p --mode ask --workspace "/path/to/your/project" \
   --trust --approve-mcps --output-format stream-json --stream-partial-output "your question"
 ```
 
-Your hub rules in `.cursor/rules/hub.mdc` and `instructions.md` apply automatically. Topic subfolders (Business, Karabiner Scripts, etc.) are available when questions relate to them.
+Chat history is read from Cursor’s agent transcript files under `~/.cursor/projects/<project-slug>/agent-transcripts/`. Prompts and replies go through the local `agent` process; optional Notion tasks call the Notion API when configured.
+
+## Branding
+
+Open-source assets live in `branding/`:
+
+| File | Use |
+|------|-----|
+| `logo.svg` | README, docs |
+| `icon-1024.png` | App icon master |
 
 ## Development
 
-Open `CursorPopup.xcodeproj` in Xcode, or run:
+Open `CursorPopup.xcodeproj` in Xcode, or:
 
 ```bash
 xcodebuild -project CursorPopup.xcodeproj -scheme CursorPopup -configuration Debug build
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Before your first public GitHub push, run [scripts/pre-publish-check.sh](scripts/pre-publish-check.sh) and read [docs/PUBLISHING.md](docs/PUBLISHING.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

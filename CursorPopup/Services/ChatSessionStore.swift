@@ -107,7 +107,11 @@ enum ChatSessionStore {
             guard !cleaned.isEmpty else { continue }
 
             let role: ChatMessage.Role = roleString == "user" ? .user : .assistant
-            messages.append(ChatMessage(role: role, text: cleaned))
+            let displayText = role == .assistant
+                ? AssistantMessageFormatter.displayText(from: cleaned)
+                : cleaned
+            guard !displayText.isEmpty else { continue }
+            messages.append(ChatMessage(role: role, text: displayText))
         }
 
         return messages

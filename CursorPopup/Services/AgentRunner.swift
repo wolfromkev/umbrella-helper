@@ -3,6 +3,7 @@ import Foundation
 enum AgentEvent {
     case sessionStarted(String)
     case textDelta(String)
+    case textFinal(String)
     case completed
     case failed(String)
 }
@@ -165,15 +166,9 @@ final class AgentRunner {
         if let type = json["type"] as? String, type == "result",
            let subtype = json["subtype"] as? String, subtype == "success",
            let result = json["result"] as? String,
-           !result.isEmpty,
-           result.count >= latestFullText.count {
-            if result.count > latestFullText.count {
-                let delta = String(result.dropFirst(latestFullText.count))
-                latestFullText = result
-                if !delta.isEmpty {
-                    onEvent(.textDelta(delta))
-                }
-            }
+           !result.isEmpty {
+            latestFullText = result
+            onEvent(.textFinal(result))
         }
 
         if let type = json["type"] as? String, type == "result",

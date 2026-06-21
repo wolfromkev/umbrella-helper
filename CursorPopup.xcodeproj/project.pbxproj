@@ -42,6 +42,7 @@
 		B10000000000000000000033 /* AppRelauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000035 /* AppRelauncher.swift */; };
 		B10000000000000000000035 /* GeometricPencil.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000037 /* GeometricPencil.swift */; };
 		B10000000000000000000036 /* ResponseSoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000038 /* ResponseSoundPlayer.swift */; };
+		B10000000000000000000037 /* AssistantMessageFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000039 /* AssistantMessageFormatter.swift */; };
 		B10000000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -84,6 +85,7 @@
 		F10000000000000000000029 /* ActiveScreenTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveScreenTracker.swift; sourceTree = "<group>"; };
 		F10000000000000000000037 /* GeometricPencil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometricPencil.swift; sourceTree = "<group>"; };
 		F10000000000000000000038 /* ResponseSoundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseSoundPlayer.swift; sourceTree = "<group>"; };
+		F10000000000000000000039 /* AssistantMessageFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantMessageFormatter.swift; sourceTree = "<group>"; };
 		F10000000000000000000025 /* ClickOutsideDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickOutsideDismissal.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -135,6 +137,7 @@
 		G10000000000000000000004 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				F10000000000000000000039 /* AssistantMessageFormatter.swift */,
 				F10000000000000000000005 /* PopupContentView.swift */,
 				F10000000000000000000015 /* FloatingChatView.swift */,
 				F10000000000000000000017 /* OpenInCursorAgentButton.swift */,
@@ -286,6 +289,7 @@
 				B10000000000000000000032 /* NotionTaskContentView.swift in Sources */,
 				B10000000000000000000033 /* AppRelauncher.swift in Sources */,
 				B10000000000000000000034 /* SystemPermissions.swift in Sources */,
+				B10000000000000000000037 /* AssistantMessageFormatter.swift in Sources */,
 				B10000000000000000000036 /* ResponseSoundPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

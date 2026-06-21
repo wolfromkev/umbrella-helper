@@ -22,3 +22,6 @@ DerivedData/
 # Secrets
 .env
 *.pem
+
+# Editor / local agent rules (may contain personal paths)
+.cursor/

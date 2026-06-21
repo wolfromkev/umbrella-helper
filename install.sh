@@ -31,6 +31,6 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "$TARGET"
 ditto "$BUILT_APP" "$TARGET"
 
-echo "Done. Press ⌥Space (Option + Space) to open the popup."
+echo "Done. Press F5 (default) to open the chat box."
 echo "Installed: $TARGET"
 echo "Launch the app once from Applications if login item registration needs approval."
