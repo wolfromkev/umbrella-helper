@@ -8,13 +8,13 @@ A native macOS floating chat bar (Claude-style) that sends general questions to 
 
 ## Features
 
-- **Global hotkey:** `⌥Space` (Option + Space) — same feel as Claude’s popup
+- **Global hotkey:** `F5` toggles the chat box (customizable in Settings)
 - **Claude-like UI:** dark pill input bar, orange send button, streaming response below
 - **Cursor Chat workspace:** questions run in ask mode against `~/Cursor Chat`
 - **New chat per popup:** each time you open the popup, you get a fresh session; follow-ups in the same popup continue that chat
 - **Launch at login:** enabled by default on first run
 - **Menu bar:** logo icon for Show Popup, Toggle Chat, Settings, Restart, and Quit
-- **Shortcuts:** `⌥Space` quick input · `F5` chat box toggle · `↑↓` browse chat history
+- **Shortcuts:** `F5` chat box toggle · `↑↓` browse chat history
 - **Response modes (Settings):**
   - **Expand below input bar** — default; replies stream under the pill
   - **Floating chat window** — opens a separate draggable chat panel (bottom-right) with full message history and follow-ups
@@ -37,7 +37,7 @@ This builds the app, copies it to `/Applications/Cursor Popup.app`, and register
 
 ## Usage
 
-1. Press **⌥Space** anywhere to open the popup
+1. Press **F5** (or your configured chat box shortcut) anywhere to open the chat box
 2. Type your question and press **Return** or click the arrow button
 3. Press **Escape** to dismiss
 4. Open **Settings** from the menu bar logo to change the workspace path or toggle launch at login

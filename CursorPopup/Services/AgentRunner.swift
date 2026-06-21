@@ -10,6 +10,7 @@ enum AgentEvent {
 final class AgentRunner {
     private var process: Process?
     private var stdoutPipe: Pipe?
+    private var activeRunID = UUID()
     private let queue = DispatchQueue(label: "com.cursorpopup.agent", qos: .userInitiated)
 
     func cancel() {
@@ -19,6 +20,11 @@ final class AgentRunner {
         }
         process = nil
         stdoutPipe = nil
+        activeRunID = UUID()
+    }
+
+    private static func wasTerminated(_ status: Int32) -> Bool {
+        status == 15 || status == 143
     }
 
     func send(
@@ -99,12 +105,18 @@ final class AgentRunner {
             }
         }
 
-        process.terminationHandler = { proc in
+        let runID = UUID()
+        activeRunID = runID
+
+        process.terminationHandler = { [weak self] proc in
             pipe.fileHandleForReading.readabilityHandler = nil
-            if proc.terminationStatus == 0 {
+            guard let self, self.activeRunID == runID else { return }
+
+            let status = proc.terminationStatus
+            if status == 0 {
                 onEvent(.completed)
-            } else if proc.terminationStatus != 15 {
-                onEvent(.failed("Agent exited with status \(proc.terminationStatus)."))
+            } else if !Self.wasTerminated(status) {
+                onEvent(.failed("Agent exited with status \(status)."))
             }
         }
 

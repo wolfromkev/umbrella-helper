@@ -5,9 +5,16 @@ enum ChatPanelMetrics {
     static let panelWidth: CGFloat = 720
     static let compactBaseHeight: CGFloat = 118
     static let compactAttachmentHeight: CGFloat = 78
-    static let expandedHeight: CGFloat = 560
+    static let expandedMaxHeight: CGFloat = 560
+    static let expandedMinHeight: CGFloat = 220
     static let margin: CGFloat = 24
     static let contentWidth: CGFloat = panelWidth - 32
+    static let outerPadding: CGFloat = 16
+    static let messageBubbleMaxWidth: CGFloat = contentWidth - 88
+
+    /// Header, dividers, input, footer — everything except the messages scroll area.
+    static let expandedChromeHeight: CGFloat = 178
+    static let messagesMaxHeight: CGFloat = expandedMaxHeight - expandedChromeHeight
 
     static func compactHeight(attachmentCount: Int) -> CGFloat {
         attachmentCount > 0 ? compactBaseHeight + compactAttachmentHeight : compactBaseHeight
@@ -22,12 +29,16 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
     private var globalClickMonitor: Any?
     private let clickOutsideDismissal = ClickOutsideDismissal()
     private var activeScreen: NSScreen?
+    private var isClosing = false
 
     func configure(model: AppModel) {
         self.model = model
     }
 
     func showPanel() {
+        isClosing = false
+        activeScreen = ActiveScreenTracker.presentationScreen(excluding: panel)
+
         if panel == nil {
             let contentView = FloatingChatView()
                 .environmentObject(model!)
@@ -48,37 +59,70 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
         }
 
         resizeToFitContent(animated: false)
-        panel?.makeKeyAndOrderFront(nil)
+        presentFromBottom()
         installClickOutsideDismissal()
         NotificationCenter.default.post(name: .focusChatInputField, object: nil)
     }
 
     func closePanel() {
+        guard let panel, !isClosing else { return }
+
+        isClosing = true
+        activeScreen = nil
         removeClickOutsideDismissal()
-        panel?.orderOut(nil)
-        model?.isChatBoxVisible = false
+
+        let targetOrigin = NSPoint(
+            x: panel.frame.origin.x,
+            y: panel.frame.origin.y - PanelAnimation.slideOffset
+        )
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = PanelAnimation.hideDuration
+            context.timingFunction = PanelAnimation.hideTiming
+            panel.animator().setFrameOrigin(targetOrigin)
+            panel.animator().alphaValue = 0
+        } completionHandler: {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            self.isClosing = false
+            self.model?.isChatBoxVisible = false
+        }
     }
 
     func resizeToFitContent(animated: Bool = true) {
         guard let panel else { return }
 
         let expanded = model?.hasChatConversation ?? false
-        let screen = activeScreen ?? screenForChat()
+        let screen = activeScreen ?? ActiveScreenTracker.presentationScreen(excluding: panel)
         activeScreen = screen
 
         let currentFrame = panel.isVisible ? panel.frame : nil
         let attachmentCount = model?.pendingAttachments.count ?? 0
+
+        let height: CGFloat
+        if expanded, let contentView = panel.contentView {
+            contentView.layoutSubtreeIfNeeded()
+            let fittingHeight = contentView.fittingSize.height
+            height = max(
+                ChatPanelMetrics.expandedMinHeight,
+                min(fittingHeight, ChatPanelMetrics.expandedMaxHeight)
+            )
+        } else {
+            height = ChatPanelMetrics.compactHeight(attachmentCount: attachmentCount)
+        }
+
         let targetFrame = frame(
-            forExpanded: expanded,
-            attachmentCount: attachmentCount,
+            width: ChatPanelMetrics.panelWidth,
+            height: height,
             on: screen,
-            anchoringTo: currentFrame
+            anchoringTo: currentFrame,
+            expanded: expanded
         )
 
         if animated {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.12
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.duration = PanelAnimation.resizeDuration
+                context.timingFunction = PanelAnimation.resizeTiming
                 panel.animator().setFrame(targetFrame, display: true)
             }
         } else {
@@ -100,7 +144,8 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
                 let self,
                 let panel = self.panel,
                 self.model?.isChatBoxVisible == true,
-                !panel.isKeyWindow
+                !panel.isKeyWindow,
+                !self.isClosing
             else {
                 return
             }
@@ -109,16 +154,13 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
     }
 
     private func frame(
-        forExpanded expanded: Bool,
-        attachmentCount: Int,
+        width: CGFloat,
+        height: CGFloat,
         on screen: NSScreen,
-        anchoringTo currentFrame: NSRect?
+        anchoringTo currentFrame: NSRect?,
+        expanded: Bool
     ) -> NSRect {
         let screenFrame = screen.visibleFrame
-        let width = ChatPanelMetrics.panelWidth
-        let height = expanded
-            ? ChatPanelMetrics.expandedHeight
-            : ChatPanelMetrics.compactHeight(attachmentCount: attachmentCount)
 
         var frame = NSRect(
             x: screenFrame.midX - width / 2,
@@ -141,15 +183,30 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
         return frame
     }
 
-    private func screenForChat() -> NSScreen {
-        let mouse = NSEvent.mouseLocation
-        if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) {
-            return screen
+    private func presentFromBottom() {
+        guard let panel else { return }
+
+        let screen = activeScreen ?? ActiveScreenTracker.presentationScreen(excluding: panel)
+        let screenFrame = screen.visibleFrame
+        let targetFrame = panel.frame
+        let startFrame = NSRect(
+            x: targetFrame.origin.x,
+            y: screenFrame.minY + ChatPanelMetrics.margin - PanelAnimation.slideOffset,
+            width: targetFrame.width,
+            height: targetFrame.height
+        )
+
+        panel.alphaValue = 0
+        panel.setFrame(startFrame, display: false)
+        panel.makeKeyAndOrderFront(nil)
+        panel.level = .floating
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = PanelAnimation.showDuration
+            context.timingFunction = PanelAnimation.showTiming
+            panel.animator().setFrame(targetFrame, display: true)
+            panel.animator().alphaValue = 1
         }
-        if let panelScreen = panel?.screen {
-            return panelScreen
-        }
-        return NSScreen.main ?? NSScreen.screens[0]
     }
 
     private func installClickOutsideDismissal() {
@@ -181,12 +238,16 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
 
     private func installMonitors() {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let panel = self.panel, panel.isKeyWindow else {
+                return event
+            }
+
             if event.keyCode == HistoryKeyCodes.escape {
-                self?.model?.hideChatBox()
+                self.model?.hideChatBox()
                 return nil
             }
 
-            if HistoryKeyHandler.handle(event: event, model: self?.model) == nil {
+            if HistoryKeyHandler.handle(event: event, model: self.model) == nil {
                 NotificationCenter.default.post(name: .focusChatInputField, object: nil)
                 return nil
             }

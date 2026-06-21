@@ -1,55 +1,12 @@
 import AppKit
 import SwiftUI
 
-final class FloatingPanel: NSPanel {
-    init(contentRect: NSRect) {
-        super.init(
-            contentRect: contentRect,
-            styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
-            backing: .buffered,
-            defer: false
-        )
-
-        isFloatingPanel = true
-        level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-        isMovableByWindowBackground = false
-        backgroundColor = .clear
-        hasShadow = false
-        isOpaque = false
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        animationBehavior = .none
-        hidesOnDeactivate = false
-    }
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-}
-
-enum PanelMetrics {
-    static let popupWidth: CGFloat = 720
-    static let minHeight: CGFloat = 120
-    static let maxHeight: CGFloat = 560
-}
-
-enum PanelAnimation {
-    static let showDuration: TimeInterval = 0.22
-    static let hideDuration: TimeInterval = 0.18
-    static let resizeDuration: TimeInterval = 0.20
-    static let bottomMargin: CGFloat = 24
-    static let slideOffset: CGFloat = 18
-
-    static let showTiming = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
-    static let hideTiming = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
-    static let resizeTiming = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
-}
-
 @MainActor
-final class PanelController: NSObject, NSWindowDelegate {
+final class NotionTaskPanelController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
     private weak var model: AppModel?
     private var keyMonitor: Any?
+    private var mouseDownMonitor: Any?
     private var globalClickMonitor: Any?
     private let clickOutsideDismissal = ClickOutsideDismissal()
     private var isClosing = false
@@ -64,7 +21,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         activeScreen = ActiveScreenTracker.presentationScreen(excluding: panel)
 
         if panel == nil {
-            let contentView = PopupContentView()
+            let contentView = NotionTaskContentView()
                 .environmentObject(model!)
 
             let hosting = NSHostingController(rootView: contentView)
@@ -73,7 +30,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             }
 
             let panel = FloatingPanel(
-                contentRect: NSRect(x: 0, y: 0, width: PanelMetrics.popupWidth, height: 160)
+                contentRect: NSRect(x: 0, y: 0, width: 588, height: 120)
             )
             panel.delegate = self
             panel.contentViewController = hosting
@@ -84,7 +41,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         resizeToFitContent(animated: false)
         presentFromBottom()
         installClickOutsideDismissal()
-        focusPrompt()
+        focusTaskField()
     }
 
     func closePanel() {
@@ -108,12 +65,17 @@ final class PanelController: NSObject, NSWindowDelegate {
             panel.orderOut(nil)
             panel.alphaValue = 1
             self.isClosing = false
-            self.model?.isVisible = false
+            self.model?.isNotionTaskVisible = false
         }
     }
 
-    func focusPrompt() {
-        NotificationCenter.default.post(name: .focusPromptField, object: nil)
+    func focusTaskField() {
+        NotificationCenter.default.post(name: .focusNotionTaskField, object: nil)
+    }
+
+    var hasKeyboardFocus: Bool {
+        guard model?.isNotionTaskVisible == true else { return false }
+        return panel?.isKeyWindow == true
     }
 
     func resizeToFitContent(animated: Bool = true) {
@@ -124,7 +86,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         contentView.layoutSubtreeIfNeeded()
         let fittingHeight = contentView.fittingSize.height
-        let width = PanelMetrics.popupWidth
+        let width = max(contentView.fittingSize.width + 28, 588)
         let height = max(PanelMetrics.minHeight, min(fittingHeight, PanelMetrics.maxHeight))
         let targetFrame = bottomCenterFrame(width: width, height: height, on: screen)
 
@@ -143,7 +105,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard
             let window = notification.object as? NSWindow,
             window === panel,
-            model?.isVisible == true,
+            model?.isNotionTaskVisible == true,
             !isClosing
         else {
             return
@@ -153,13 +115,13 @@ final class PanelController: NSObject, NSWindowDelegate {
             guard
                 let self,
                 let panel = self.panel,
-                self.model?.isVisible == true,
+                self.model?.isNotionTaskVisible == true,
                 !panel.isKeyWindow,
                 !self.isClosing
             else {
                 return
             }
-            self.model?.hidePopup()
+            self.model?.hideNotionTask()
         }
     }
 
@@ -207,7 +169,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard let panel else { return }
 
         clickOutsideDismissal.activate(for: panel) { [weak self] in
-            self?.model?.hidePopup()
+            self?.model?.hideNotionTask()
         }
 
         removeGlobalClickMonitor()
@@ -237,20 +199,26 @@ final class PanelController: NSObject, NSWindowDelegate {
             }
 
             if event.keyCode == HistoryKeyCodes.escape {
-                self.model?.hidePopup()
+                self.model?.hideNotionTask()
                 return nil
             }
+            return event
+        }
 
-            if HistoryKeyHandler.handle(event: event, model: self.model) == nil {
-                self.focusPrompt()
-                return nil
+        mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, let panel = self.panel, panel.isVisible else {
+                return event
             }
 
+            let locationInWindow = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
+            if panel.contentView?.hitTest(locationInWindow) != nil {
+                panel.makeKey()
+            }
             return event
         }
     }
 }
 
 extension Notification.Name {
-    static let focusPromptField = Notification.Name("focusPromptField")
+    static let focusNotionTaskField = Notification.Name("focusNotionTaskField")
 }

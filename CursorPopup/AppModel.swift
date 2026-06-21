@@ -7,29 +7,50 @@ enum HistoryNavigationDirection {
     case older
 }
 
+enum WorkspaceNavigationDirection {
+    case previous
+    case next
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var isVisible = false
     @Published var isChatBoxVisible = false
     @Published var isSettingsVisible = false
+    @Published var isNotionTaskVisible = false
     @Published var prompt = ""
+    @Published var notionTaskTitle = ""
+    @Published var notionSelectedCategory = NotionFieldSelection.none
+    @Published var notionSelectedPriority = NotionFieldSelection.none
+    @Published var notionDueDate: Date? = Date()
+    @Published var notionSchema: NotionDatabaseSchema?
+    @Published var isLoadingNotionSchema = false
+    @Published var notionSchemaError: String?
+    @Published var isNotionSubmitting = false
+    @Published var notionStatusMessage: String?
+    @Published var notionErrorMessage: String?
+    @Published var lastCreatedNotionTaskURL: URL?
     @Published var messages: [ChatMessage] = []
     @Published var savedSessions: [SavedChatSession] = []
     @Published var historyIndex = 0
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var pendingAttachments: [PendingAttachment] = []
+    @Published private(set) var activeWorkspacePath: String = AppSettings.shared.defaultWorkspacePath
 
     let settings = AppSettings.shared
     private let panelController = PanelController()
     private let chatPanelController = ChatPanelController()
     private let settingsPanelController = SettingsPanelController()
-    private let hotKey = GlobalHotKey(registrationID: 1)
+    private let notionTaskPanelController = NotionTaskPanelController()
     private let chatBoxHotKey = GlobalHotKey(registrationID: 2)
+    private let notionTaskHotKey = GlobalHotKey(registrationID: 3)
     private let agentRunner = AgentRunner()
     private var sessionID: String?
     private var streamingAssistantID: UUID?
+    private var agentRunGeneration = 0
     private var pasteMonitor: Any?
+    private var sessionsByWorkspace: [String: [SavedChatSession]] = [:]
 
     var usesFloatingChatBox: Bool { settings.usesFloatingChatBox }
 
@@ -45,20 +66,50 @@ final class AppModel: ObservableObject {
         !savedSessions.isEmpty
     }
 
+    var isBrandNewChat: Bool {
+        historyIndex == 0
+    }
+
+    var canBrowseWorkspaces: Bool {
+        settings.workspaceFolders.count > 1
+    }
+
+    var workspaceLabel: String {
+        settings.displayName(for: activeWorkspacePath)
+    }
+
+    var notionTaskHasKeyboardFocus: Bool {
+        notionTaskPanelController.hasKeyboardFocus
+    }
+
+    func canNavigateWorkspace(_ direction: WorkspaceNavigationDirection) -> Bool {
+        let folders = settings.workspaceFolders
+        guard folders.count > 1,
+              let index = folders.firstIndex(of: activeWorkspacePath) else {
+            return false
+        }
+
+        switch direction {
+        case .previous:
+            return index > 0
+        case .next:
+            return index < folders.count - 1
+        }
+    }
+
     var hasChatConversation: Bool {
         !messages.isEmpty
     }
 
     func start() {
+        ActiveScreenTracker.start()
         panelController.configure(model: self)
         chatPanelController.configure(model: self)
         settingsPanelController.configure(model: self)
-        hotKey.register(hotKeyID: settings.hotKey) { [weak self] in
-            Task { @MainActor in self?.togglePopup() }
-        }
-        chatBoxHotKey.register(hotKeyID: settings.chatBoxHotKey) { [weak self] in
-            Task { @MainActor in self?.toggleChatBox() }
-        }
+        notionTaskPanelController.configure(model: self)
+        settings.bootstrapNotionConfiguration()
+        resetActiveWorkspaceToDefault()
+        reloadHotKeys()
 
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
@@ -68,16 +119,69 @@ final class AppModel: ObservableObject {
         if settings.launchAtLogin {
             LaunchAtLoginManager.setEnabled(true)
         }
+
+        preloadStartupData()
+    }
+
+    private var isNotionConfigured: Bool {
+        guard let token = KeychainStorage.notionToken, !token.isEmpty else { return false }
+        return !settings.notionDatabaseID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func preloadStartupData() {
+        preloadWorkspaceSessions()
+        if isNotionConfigured {
+            loadNotionSchema()
+        }
+    }
+
+    func refreshWorkspaceSessionCache() {
+        preloadWorkspaceSessions()
+    }
+
+    private func preloadWorkspaceSessions() {
+        let folders = settings.workspaceFolders
+        let defaultPath = activeWorkspacePath
+
+        Task.detached(priority: .utility) {
+            var cache: [String: [SavedChatSession]] = [:]
+            for folder in folders {
+                cache[folder] = ChatSessionStore.loadSessions(for: folder)
+            }
+
+            await MainActor.run {
+                self.sessionsByWorkspace = cache
+                self.applyCachedSessions(for: defaultPath)
+            }
+        }
+    }
+
+    private func applyCachedSessions(for workspacePath: String) {
+        savedSessions = sessionsByWorkspace[workspacePath] ?? []
+        if historyIndex > savedSessions.count {
+            historyIndex = savedSessions.count
+        }
     }
 
     func stop() {
-        hotKey.unregister()
+        ActiveScreenTracker.stop()
         chatBoxHotKey.unregister()
+        notionTaskHotKey.unregister()
         removePasteMonitor()
         panelController.closePanel()
         chatPanelController.closePanel()
         settingsPanelController.closePanel()
+        notionTaskPanelController.closePanel()
         agentRunner.cancel()
+    }
+
+    func reloadHotKeys() {
+        chatBoxHotKey.register(hotKeyID: settings.chatBoxHotKey) { [weak self] in
+            Task { @MainActor in self?.toggleChatBox() }
+        }
+        notionTaskHotKey.register(hotKeyID: settings.notionTaskHotKey) { [weak self] in
+            Task { @MainActor in self?.toggleNotionTask() }
+        }
     }
 
     func togglePopup() {
@@ -90,8 +194,10 @@ final class AppModel: ObservableObject {
 
     func showPopup() {
         reloadSavedSessions()
-        historyIndex = 0
-        applyHistorySelection(clearChatBox: true)
+        if !isLoading {
+            historyIndex = 0
+            applyHistorySelection(clearChatBox: true)
+        }
         panelController.showPanel()
         isVisible = true
         updatePasteMonitor()
@@ -104,9 +210,6 @@ final class AppModel: ObservableObject {
         isVisible = false
         updatePasteMonitor()
         panelController.closePanel()
-        if !isChatBoxVisible {
-            agentRunner.cancel()
-        }
     }
 
     func toggleChatBox() {
@@ -129,9 +232,6 @@ final class AppModel: ObservableObject {
         chatPanelController.closePanel()
         isChatBoxVisible = false
         updatePasteMonitor()
-        if isLoading {
-            agentRunner.cancel()
-        }
     }
 
     func showSettings() {
@@ -149,6 +249,121 @@ final class AppModel: ObservableObject {
         guard isSettingsVisible else { return }
         settingsPanelController.closePanel()
         isSettingsVisible = false
+    }
+
+    func toggleNotionTask() {
+        if isNotionTaskVisible {
+            hideNotionTask()
+        } else {
+            showNotionTask()
+        }
+    }
+
+    func showNotionTask() {
+        if isChatBoxVisible {
+            hideChatBox()
+        }
+        resetNotionTaskState(clearTitle: true)
+        notionTaskPanelController.showPanel()
+        isNotionTaskVisible = true
+        loadNotionSchema()
+        NSApp.activate(ignoringOtherApps: true)
+        notionTaskPanelController.focusTaskField()
+    }
+
+    func hideNotionTask() {
+        guard isNotionTaskVisible else { return }
+        isNotionTaskVisible = false
+        notionTaskPanelController.closePanel()
+        resetNotionTaskState(clearTitle: true)
+    }
+
+    var canSubmitNotionTask: Bool {
+        !notionTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isNotionSubmitting
+    }
+
+    func submitNotionTask() {
+        let trimmed = notionTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canSubmitNotionTask else { return }
+        guard let schema = notionSchema else {
+            notionErrorMessage = notionSchemaError ?? "Notion options are still loading."
+            notionTaskPanelController.resizeToFitContent()
+            return
+        }
+
+        let input = NotionTaskInput(
+            title: trimmed,
+            category: NotionFieldSelection.value(from: notionSelectedCategory),
+            priority: NotionFieldSelection.value(from: notionSelectedPriority),
+            dueDate: notionDueDate
+        )
+
+        hideNotionTask()
+
+        Task {
+            do {
+                _ = try await NotionAPIClient.shared.createTask(input, schema: schema)
+            } catch {
+                await MainActor.run {
+                    presentNotionTaskError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func presentNotionTaskError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Could not add Notion task"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    func refreshNotionTaskLayout() {
+        if isNotionTaskVisible {
+            notionTaskPanelController.resizeToFitContent()
+        }
+    }
+
+    func loadNotionSchema(force: Bool = false) {
+        guard !isLoadingNotionSchema else { return }
+        if !force, notionSchema != nil { return }
+
+        isLoadingNotionSchema = true
+        notionSchemaError = nil
+        refreshNotionTaskLayout()
+
+        Task {
+            do {
+                let schema = try await NotionAPIClient.shared.fetchDatabaseSchema()
+                await MainActor.run {
+                    notionSchema = schema
+                    isLoadingNotionSchema = false
+                    notionSchemaError = nil
+                    refreshNotionTaskLayout()
+                }
+            } catch {
+                await MainActor.run {
+                    notionSchema = nil
+                    isLoadingNotionSchema = false
+                    notionSchemaError = error.localizedDescription
+                    refreshNotionTaskLayout()
+                }
+            }
+        }
+    }
+
+    private func resetNotionTaskState(clearTitle: Bool) {
+        if clearTitle {
+            notionTaskTitle = ""
+        }
+        notionSelectedCategory = NotionFieldSelection.none
+        notionSelectedPriority = NotionFieldSelection.none
+        notionDueDate = Date()
+        isNotionSubmitting = false
+        notionStatusMessage = nil
+        notionErrorMessage = nil
+        lastCreatedNotionTaskURL = nil
     }
 
     func addPastedImage(_ image: NSImage) {
@@ -169,14 +384,74 @@ final class AppModel: ObservableObject {
     }
 
     var canSubmitPrompt: Bool {
-        (!prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty) && !isLoading
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
     }
 
-    func reloadSavedSessions() {
-        savedSessions = ChatSessionStore.loadSessions(for: settings.workspacePath)
-        if historyIndex > savedSessions.count {
-            historyIndex = savedSessions.count
+    func reloadSavedSessions(forceReload: Bool = false) {
+        let path = activeWorkspacePath
+
+        if forceReload || sessionsByWorkspace[path] == nil {
+            let loaded = ChatSessionStore.loadSessions(for: path)
+            sessionsByWorkspace[path] = loaded
         }
+
+        applyCachedSessions(for: path)
+    }
+
+    func resetActiveWorkspaceToDefault() {
+        settings.ensureDefaultWorkspaceIsValid()
+        activeWorkspacePath = settings.defaultWorkspacePath
+    }
+
+    func syncActiveWorkspaceWithSettings() {
+        settings.ensureDefaultWorkspaceIsValid()
+        let folders = settings.workspaceFolders
+        guard !folders.isEmpty else { return }
+
+        if !folders.contains(activeWorkspacePath) {
+            activeWorkspacePath = settings.defaultWorkspacePath
+            historyIndex = 0
+            applyHistorySelection(clearChatBox: true)
+        }
+
+        refreshWorkspaceSessionCache()
+    }
+
+    func navigateWorkspace(_ direction: WorkspaceNavigationDirection) -> Bool {
+        guard prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              pendingAttachments.isEmpty,
+              !isLoading else {
+            return false
+        }
+
+        let folders = settings.workspaceFolders
+        guard folders.count > 1,
+              let index = folders.firstIndex(of: activeWorkspacePath) else {
+            return false
+        }
+
+        let newIndex: Int
+        switch direction {
+        case .previous:
+            guard index > 0 else { return false }
+            newIndex = index - 1
+        case .next:
+            guard index < folders.count - 1 else { return false }
+            newIndex = index + 1
+        }
+
+        activeWorkspacePath = folders[newIndex]
+        historyIndex = 0
+        applyHistorySelection(clearChatBox: false)
+        reloadSavedSessions()
+
+        if isVisible && !usesFloatingChatBox {
+            panelController.resizeToFitContent()
+        }
+        if isChatBoxVisible {
+            chatPanelController.resizeToFitContent()
+        }
+        return true
     }
 
     func navigateHistory(_ direction: HistoryNavigationDirection) -> Bool {
@@ -212,6 +487,7 @@ final class AppModel: ObservableObject {
         errorMessage = nil
         isLoading = false
         streamingAssistantID = nil
+        agentRunGeneration += 1
         agentRunner.cancel()
 
         if clearChatBox {
@@ -239,6 +515,13 @@ final class AppModel: ObservableObject {
 
         let outgoingPrompt = trimmed.isEmpty ? "What's in this image?" : trimmed
 
+        if isLoading {
+            finalizeInFlightAssistantForFollowUp()
+        }
+
+        agentRunGeneration += 1
+        let runGeneration = agentRunGeneration
+
         isLoading = true
         errorMessage = nil
         prompt = ""
@@ -257,16 +540,24 @@ final class AppModel: ObservableObject {
             panelController.resizeToFitContent()
         }
 
+        schedulePanelResize()
+
         agentRunner.send(
             prompt: outgoingPrompt,
-            workspace: settings.workspacePath,
+            workspace: activeWorkspacePath,
             sessionID: sessionID,
             imagePaths: imagePaths
         ) { [weak self] event in
             Task { @MainActor in
-                self?.handleAgentEvent(event)
+                guard let self, self.agentRunGeneration == runGeneration else { return }
+                self.handleAgentEvent(event)
             }
         }
+    }
+
+    func refreshChatPanelLayout() {
+        guard isChatBoxVisible else { return }
+        chatPanelController.resizeToFitContent()
     }
 
     private func refreshInputLayout() {
@@ -275,6 +566,15 @@ final class AppModel: ObservableObject {
         }
         if isChatBoxVisible {
             chatPanelController.resizeToFitContent()
+        }
+    }
+
+    private func schedulePanelResize() {
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshInputLayout()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.refreshInputLayout()
         }
     }
 
@@ -318,18 +618,30 @@ final class AppModel: ObservableObject {
             sessionID = id
         case .textDelta(let delta):
             appendToStreamingAssistant(delta)
-            if !settings.usesFloatingChatBox {
+            if settings.usesFloatingChatBox {
+                if isChatBoxVisible {
+                    chatPanelController.resizeToFitContent()
+                }
+            } else if isVisible {
                 panelController.resizeToFitContent()
             }
         case .completed:
             finishStreamingAssistant()
             isLoading = false
-            reloadSavedSessions()
+            reloadSavedSessions(forceReload: true)
+            playResponseCompletionSoundIfNeeded()
+            if settings.usesFloatingChatBox, isChatBoxVisible {
+                chatPanelController.resizeToFitContent()
+            }
         case .failed(let message):
             finishStreamingAssistant()
             isLoading = false
             errorMessage = message
-            if !settings.usesFloatingChatBox {
+            if settings.usesFloatingChatBox {
+                if isChatBoxVisible {
+                    chatPanelController.resizeToFitContent()
+                }
+            } else if isVisible {
                 panelController.resizeToFitContent()
             }
         }
@@ -338,13 +650,36 @@ final class AppModel: ObservableObject {
     private func appendToStreamingAssistant(_ delta: String) {
         guard let streamingAssistantID,
               let index = messages.firstIndex(where: { $0.id == streamingAssistantID }) else { return }
-        messages[index].text += delta
+        var updated = messages[index]
+        updated.text += delta
+        messages[index] = updated
     }
 
     private func finishStreamingAssistant() {
         guard let streamingAssistantID,
               let index = messages.firstIndex(where: { $0.id == streamingAssistantID }) else { return }
-        messages[index].isStreaming = false
+        var updated = messages[index]
+        updated.isStreaming = false
+        messages[index] = updated
+        self.streamingAssistantID = nil
+    }
+
+    private func playResponseCompletionSoundIfNeeded() {
+        guard messages.contains(where: { $0.role == .assistant && !$0.text.isEmpty }) else { return }
+        ResponseSoundPlayer.playCompletion()
+    }
+
+    private func finalizeInFlightAssistantForFollowUp() {
+        guard let streamingAssistantID,
+              let index = messages.firstIndex(where: { $0.id == streamingAssistantID }) else { return }
+
+        var updated = messages[index]
+        updated.isStreaming = false
+        if updated.text.isEmpty {
+            messages.remove(at: index)
+        } else {
+            messages[index] = updated
+        }
         self.streamingAssistantID = nil
     }
 
@@ -354,7 +689,7 @@ final class AppModel: ObservableObject {
 
     func openInCursorAgent() {
         CursorLauncher.openInCursorAgent(
-            workspace: settings.workspacePath,
+            workspace: activeWorkspacePath,
             messages: messages
         )
     }

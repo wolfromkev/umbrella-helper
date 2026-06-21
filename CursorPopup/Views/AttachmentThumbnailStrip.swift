@@ -57,6 +57,8 @@ struct PromptInputShell<Content: View>: View {
     let attachments: [PendingAttachment]
     let onRemoveAttachment: (UUID) -> Void
     var showsBackground: Bool = true
+    var horizontalPadding: CGFloat = 18
+    var verticalPadding: CGFloat = 14
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -66,8 +68,8 @@ struct PromptInputShell<Content: View>: View {
             }
             content()
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, attachments.isEmpty ? 14 : 12)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, attachments.isEmpty ? verticalPadding : 12)
         .background {
             if showsBackground {
                 PopupPillBackground(cornerRadius: 22)

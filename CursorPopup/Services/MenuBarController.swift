@@ -51,6 +51,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
         menu.addItem(menuItem("Show Popup", action: #selector(showPopup)))
         menu.addItem(menuItem("Toggle Chat", action: #selector(toggleChat)))
+        menu.addItem(menuItem("New Notion Task", action: #selector(showNotionTask)))
         menu.addItem(menuItem("Settings…", action: #selector(openSettings)))
         menu.addItem(.separator())
         menu.addItem(menuItem("Hide Menu Bar Icon", action: #selector(hideMenuBarIcon)))
@@ -80,6 +81,10 @@ final class MenuBarController: NSObject {
         appModel?.toggleChatBox()
     }
 
+    @objc private func showNotionTask() {
+        appModel?.showNotionTask()
+    }
+
     @objc private func openSettings() {
         appModel?.showSettings()
     }
@@ -89,9 +94,7 @@ final class MenuBarController: NSObject {
     }
 
     @objc private func restartApp() {
-        let bundleURL = URL(fileURLWithPath: Bundle.main.bundlePath)
-        NSWorkspace.shared.open(bundleURL)
-        NSApp.terminate(nil)
+        AppRelauncher.restart()
     }
 
     @objc private func quitApp() {

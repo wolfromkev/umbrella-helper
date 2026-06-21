@@ -4,9 +4,19 @@ private enum ChatScrollAnchor {
     static let bottom = "chat-scroll-bottom"
 }
 
+private struct MessagesContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct FloatingChatView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var isInputFocused: Bool
+    @State private var messagesContentHeight: CGFloat = 0
+    @State private var stickToBottom = true
 
     private var hasConversation: Bool {
         model.hasChatConversation
@@ -51,14 +61,20 @@ struct FloatingChatView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 6)
         }
-        .frame(width: ChatPanelMetrics.contentWidth, height: ChatPanelMetrics.expandedHeight - 32, alignment: .top)
+        .frame(width: ChatPanelMetrics.contentWidth, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.28), radius: 20, y: 8)
         )
         .padding(16)
-        .frame(width: ChatPanelMetrics.panelWidth, height: ChatPanelMetrics.expandedHeight)
+        .frame(width: ChatPanelMetrics.panelWidth)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var messagesScrollHeight: CGFloat {
+        guard messagesContentHeight > 0 else { return 0 }
+        return min(messagesContentHeight, ChatPanelMetrics.messagesMaxHeight)
     }
 
     private var compactInputBar: some View {
@@ -67,8 +83,7 @@ struct FloatingChatView: View {
             onRemoveAttachment: model.removeAttachment
         ) {
             HStack(spacing: 12) {
-                LogoMarkView(size: 22)
-                    .frame(width: 28)
+                InputBarLeadingChevron()
 
                 TextField("What can I help you with today?", text: $model.prompt, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -76,45 +91,30 @@ struct FloatingChatView: View {
                     .foregroundStyle(.primary)
                     .focused($isInputFocused)
                     .lineLimit(1...4)
-                    .disabled(model.isLoading)
                     .onSubmit { model.submitPrompt() }
 
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(model.historyLabel)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: 140, alignment: .trailing)
-                    if model.canBrowseHistory {
-                        Text("↑↓ history")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.secondary.opacity(0.7))
-                    }
-                }
-                .padding(.horizontal, 2)
+                InputBarTrailingIndicator()
 
-                Button(action: model.submitPrompt) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(model.canSubmitPrompt ? Color(red: 0.98, green: 0.55, blue: 0.18) : Color.gray.opacity(0.35))
-                        )
+                SettingsToolbarButton {
+                    model.showSettings()
                 }
-                .buttonStyle(.plain)
-                .disabled(!model.canSubmitPrompt)
             }
         }
     }
 
     private var header: some View {
         HStack {
-            LogoMarkView(size: 20)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text("Cursor Chat")
-                    .font(.system(size: 15, weight: .semibold))
+                if model.canBrowseWorkspaces {
+                    WorkspaceNavigatorView()
+                } else {
+                    Text(model.workspaceLabel)
+                        .font(.system(size: 15, weight: .semibold))
+                }
                 if model.canBrowseHistory {
                     Text("\(model.historyLabel) · ↑↓ history")
                         .font(.system(size: 11))
@@ -131,54 +131,81 @@ struct FloatingChatView: View {
     private var messagesList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(model.messages) { message in
-                        messageBubble(message)
-                            .id(message.id)
-                    }
-
-                    if model.isLoading && (model.messages.last?.role != .assistant || model.messages.last?.text.isEmpty == true) {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text("Thinking…")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
+                messagesContent
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: MessagesContentHeightKey.self,
+                                value: geometry.size.height
+                            )
                         }
-                        .padding(.horizontal, 4)
                     }
-
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: messagesScrollHeight > 0 ? messagesScrollHeight : nil)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        if value.translation.height > 6 {
+                            stickToBottom = false
+                        } else if value.translation.height < -6 {
+                            stickToBottom = true
+                        }
                     }
+            )
+            .onPreferenceChange(MessagesContentHeightKey.self) { height in
+                guard abs(height - messagesContentHeight) > 0.5 else { return }
 
-                    Color.clear
-                        .frame(height: 1)
-                        .id(ChatScrollAnchor.bottom)
+                let previousScrollHeight = messagesScrollHeight
+                messagesContentHeight = height
+                let newScrollHeight = messagesScrollHeight
+
+                if abs(previousScrollHeight - newScrollHeight) > 0.5 {
+                    model.refreshChatPanelLayout()
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear {
+                stickToBottom = true
                 scrollToBottomAfterLayout(proxy: proxy)
             }
             .onChange(of: model.historyIndex) { _ in
+                stickToBottom = true
                 scrollToBottomAfterLayout(proxy: proxy)
             }
             .onChange(of: model.messages.count) { _ in
+                stickToBottom = true
                 scrollToBottom(proxy: proxy)
             }
             .onChange(of: model.messages.last?.text ?? "") { _ in
-                scrollToBottom(proxy: proxy)
+                guard stickToBottom else { return }
+                scrollToBottom(proxy: proxy, animated: false)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var messagesContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(model.messages) { message in
+                messageBubble(message)
+                    .id(message.id)
+            }
+
+            if let errorMessage = model.errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Color.clear
+                .frame(height: 1)
+                .id(ChatScrollAnchor.bottom)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func messageBubble(_ message: ChatMessage) -> some View {
-        HStack {
+        HStack(alignment: .top, spacing: 0) {
             if message.role == .user { Spacer(minLength: 40) }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -186,13 +213,24 @@ struct FloatingChatView: View {
                     MessageImageStrip(imagePaths: message.imagePaths)
                 }
 
-                if !message.text.isEmpty || message.isStreaming {
-                    Text(message.text.isEmpty && message.isStreaming ? "…" : message.text)
+                if message.role == .assistant && message.text.isEmpty && (message.isStreaming || model.isLoading) {
+                    ThinkingIndicatorView(
+                        label: "Thinking…",
+                        dotSize: 7,
+                        dotColor: Color.white.opacity(0.72),
+                        showsPencil: true
+                    )
+                } else if !message.text.isEmpty {
+                    Text(message.text)
                         .font(.system(size: 14))
                         .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
                         .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .frame(maxWidth: ChatPanelMetrics.messageBubbleMaxWidth, alignment: .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -243,21 +281,7 @@ struct FloatingChatView: View {
                     .font(.system(size: 14))
                     .focused($isInputFocused)
                     .lineLimit(1...4)
-                    .disabled(model.isLoading)
                     .onSubmit { model.submitPrompt() }
-
-                Button(action: model.submitPrompt) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(model.canSubmitPrompt ? Color(red: 0.98, green: 0.55, blue: 0.18) : Color.gray.opacity(0.35))
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!model.canSubmitPrompt)
             }
         }
     }

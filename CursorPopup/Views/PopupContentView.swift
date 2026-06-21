@@ -15,11 +15,13 @@ struct PopupContentView: View {
                 inlineResponseSection
                 Divider().opacity(0.08)
             } else if model.usesFloatingChatBox && model.isLoading {
-                Text("Opening chat…")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
+                ThinkingIndicatorView(
+                    label: "Opening chat…",
+                    dotColor: Color.white.opacity(0.72),
+                    showsPencil: true
+                )
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
 
             inputBar
@@ -56,8 +58,9 @@ struct PopupContentView: View {
             showsBackground: !showsInlineResponse
         ) {
             HStack(spacing: 12) {
-                LogoMarkView(size: 22)
-                    .frame(width: 28)
+                if !model.usesFloatingChatBox {
+                    InputBarLeadingChevron()
+                }
 
                 TextField("What can I help you with today?", text: $model.prompt, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -65,7 +68,6 @@ struct PopupContentView: View {
                     .foregroundStyle(.primary)
                     .focused($isPromptFocused)
                     .lineLimit(1...4)
-                    .disabled(model.isLoading)
                     .onSubmit {
                         model.submitPrompt()
                     }
@@ -78,71 +80,50 @@ struct PopupContentView: View {
                     .foregroundStyle(.secondary)
                     .buttonStyle(.plain)
                 } else {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(model.historyLabel)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .frame(maxWidth: 140, alignment: .trailing)
-                        if model.canBrowseHistory {
-                            Text("↑↓ history")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.secondary.opacity(0.7))
-                        }
-                    }
-                    .padding(.horizontal, 2)
+                    InputBarTrailingIndicator()
                 }
 
-                Button(action: model.submitPrompt) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(model.canSubmitPrompt ? Color(red: 0.98, green: 0.55, blue: 0.18) : Color.gray.opacity(0.35))
-                        )
+                SettingsToolbarButton {
+                    model.showSettings()
                 }
-                .buttonStyle(.plain)
-                .disabled(!model.canSubmitPrompt)
-                .keyboardShortcut(.return, modifiers: [])
             }
         }
     }
 
     @ViewBuilder
     private var inlineResponseSection: some View {
-        if model.isLoading || !model.latestAssistantText.isEmpty || model.errorMessage != nil {
-            VStack(alignment: .leading, spacing: 10) {
-                if model.isLoading && model.latestAssistantText.isEmpty {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Thinking…")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if !model.latestAssistantText.isEmpty {
-                    ScrollView {
-                        Text(model.latestAssistantText)
-                            .font(.system(size: 15))
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxHeight: 320)
-                }
-
-                if let errorMessage = model.errorMessage {
-                    Text(errorMessage)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.red)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            if model.isLoading && model.latestAssistantText.isEmpty {
+                ThinkingIndicatorView(
+                    label: "Thinking…",
+                    dotColor: Color.white.opacity(0.72),
+                    showsPencil: true
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+
+            if !model.latestAssistantText.isEmpty {
+                ScrollView {
+                    Text(model.latestAssistantText)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 320)
+            }
+
+            if let errorMessage = model.errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.red)
+            }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(
+            minHeight: model.isLoading && model.latestAssistantText.isEmpty ? 52 : nil,
+            alignment: .topLeading
+        )
     }
 }

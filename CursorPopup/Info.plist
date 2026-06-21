@@ -26,5 +26,7 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Cursor Popup opens workspaces and prompts in Cursor when you hand off a conversation.</string>
 </dict>
 </plist>
