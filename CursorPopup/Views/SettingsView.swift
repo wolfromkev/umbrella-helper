@@ -32,8 +32,7 @@ struct SettingsView: View {
     @State private var recordingTarget: ShortcutTarget?
     @State private var shortcutConflict: String?
     @State private var accessibilityGranted = SystemPermissions.isAccessibilityGranted
-    @AppStorage(AppSettings.permissionsAutomationDoneKey) private var permissionsAutomationDone = false
-    @AppStorage(AppSettings.permissionsLoginItemsDoneKey) private var permissionsLoginItemsDone = false
+    @State private var loginItemRegistered = LaunchAtLoginManager.isEnabled
 
     var body: some View {
         ScrollView {
@@ -231,41 +230,30 @@ struct SettingsView: View {
                 settingsSection("Permissions") {
                     VStack(alignment: .leading, spacing: 8) {
                         permissionTaskRow(
-                            title: "Grant Accessibility permission",
-                            isComplete: accessibilityGranted,
-                            isAutomatic: true
-                        ) {
-                            SystemPermissions.requestAccessibilityPrompt()
-                        }
-
-                        permissionTaskRow(
-                            title: "Enable Cursor Popup in Accessibility settings",
+                            title: "Accessibility access",
                             isComplete: accessibilityGranted,
                             isAutomatic: true
                         ) {
                             SystemPermissions.openAccessibilitySettings()
                         }
 
-                        permissionTaskRow(
-                            title: "Allow Cursor Popup in Automation settings",
-                            isComplete: permissionsAutomationDone,
-                            isAutomatic: false,
-                            onToggle: { permissionsAutomationDone = $0 }
-                        ) {
-                            SystemPermissions.openAutomationSettings()
+                        if !accessibilityGranted {
+                            Text("Turn on Cursor Popup in System Settings → Privacy & Security → Accessibility, then quit and reopen the app.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
                         permissionTaskRow(
-                            title: "Add Cursor Popup to Login Items",
-                            isComplete: permissionsLoginItemsDone,
-                            isAutomatic: false,
-                            onToggle: { permissionsLoginItemsDone = $0 }
+                            title: "Launch at login",
+                            isComplete: loginItemRegistered,
+                            isAutomatic: true
                         ) {
                             SystemPermissions.openLoginItemsSettings()
                         }
                     }
 
-                    footerText("Needed to detect clicks outside popups and place them on the correct screen. Grant these once in System Settings. If prompts keep coming back after reinstalling, open the project in Xcode, set your Team under Signing & Capabilities, and build from there so macOS remembers the app.")
+                    footerText("Accessibility lets popups follow your cursor across displays and dismiss when you click outside. Open in Cursor uses the Cursor app directly — it does not need an Automation entry, so Cursor Popup will not appear there.")
                 }
 
                 settingsSection("About") {
@@ -298,11 +286,19 @@ struct SettingsView: View {
             notionTaskHotKey = AppSettings.shared.notionTaskHotKey
             reloadSavedNotionCredentials()
             isEditingNotionCredentials = false
-            accessibilityGranted = SystemPermissions.isAccessibilityGranted
+            refreshPermissionStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            accessibilityGranted = SystemPermissions.isAccessibilityGranted
+            refreshPermissionStatus()
         }
+        .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in
+            refreshPermissionStatus()
+        }
+    }
+
+    private func refreshPermissionStatus() {
+        accessibilityGranted = SystemPermissions.isAccessibilityGranted
+        loginItemRegistered = LaunchAtLoginManager.isEnabled
     }
 
     private func permissionTaskRow(
