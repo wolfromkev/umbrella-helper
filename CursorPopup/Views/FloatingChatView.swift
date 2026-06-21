@@ -232,9 +232,7 @@ struct FloatingChatView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(message.role == .user
-                          ? Color(red: 0.98, green: 0.55, blue: 0.18).opacity(0.22)
-                          : Color(nsColor: NSColor(calibratedWhite: 0.14, alpha: 0.95)))
+                    .fill(message.role == .user ? ChatBubbleColors.user : ChatBubbleColors.assistant)
             )
 
             if message.role == .assistant { Spacer(minLength: 40) }

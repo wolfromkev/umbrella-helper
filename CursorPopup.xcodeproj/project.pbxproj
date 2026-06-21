@@ -202,6 +202,9 @@
 			dependencies = (
 			);
 			name = CursorPopup;
+			packageProductDependencies = (
+				PKGPROD00000000000000001 /* MarkdownUI */,
+			);
 			productName = "Cursor Popup";
 			productReference = A10000000000000000000001 /* Cursor Popup.app */;
 			productType = "com.apple.product-type.application";
@@ -230,6 +233,9 @@
 				Base,
 			);
 			mainGroup = G10000000000000000000001;
+			packageReferences = (
+				PKGREF00000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			productRefGroup = G10000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -398,6 +404,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PKGREF00000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PKGPROD00000000000000001 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKGREF00000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = PR1000000000000000000001 /* Project object */;
 }

@@ -13,8 +13,15 @@ struct PopupPillBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color(nsColor: NSColor(calibratedWhite: 0.12, alpha: 0.94)))
+            .fill(ChatBubbleColors.panel)
     }
+}
+
+/// Cursor-like chat bubble fills: assistant stays dark, user is a lighter grey.
+enum ChatBubbleColors {
+    static let panel = Color(nsColor: NSColor(calibratedWhite: 0.12, alpha: 0.94))
+    static let assistant = Color(nsColor: NSColor(calibratedWhite: 0.14, alpha: 0.95))
+    static let user = Color(nsColor: NSColor(calibratedWhite: 0.26, alpha: 0.95))
 }
 
 struct SettingsToolbarButton: View {

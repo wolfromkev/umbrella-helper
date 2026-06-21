@@ -1,4 +1,5 @@
 import AppKit
+import MarkdownUI
 import SwiftUI
 
 enum AssistantMessageFormatter {
@@ -7,12 +8,26 @@ enum AssistantMessageFormatter {
         options: [.caseInsensitive]
     )
 
+    private static let runOnSentencePattern = try! NSRegularExpression(
+        pattern: #"([.!?])\s*([A-Z])"#
+    )
+
+    private static let inlineLineLabelPattern = try! NSRegularExpression(
+        pattern: #"\s+(Line\s+\w+:)"#
+    )
+
     static func displayText(from rawText: String) -> String {
         let stripped = stripStatusPreamble(from: rawText)
         if !stripped.isEmpty {
             return stripped
         }
         return looksLikeStatusIndicator(rawText) ? "" : rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Markdown source for rendering. Plain streamed text may omit newlines; rich markdown is passed through.
+    static func markdownContent(from text: String) -> String {
+        guard !containsMarkdownSyntax(text) else { return text }
+        return expandPlainRunOnText(text)
     }
 
     private static func looksLikeStatusIndicator(_ text: String) -> Bool {
@@ -47,59 +62,34 @@ enum AssistantMessageFormatter {
         return remaining.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func attributedString(from markdown: String, fontSize: CGFloat) -> AttributedString {
-        let spacedMarkdown = normalizeParagraphSpacing(markdown)
-        var options = AttributedString.MarkdownParsingOptions()
-        options.interpretedSyntax = .full
-
-        guard var attributed = try? AttributedString(markdown: spacedMarkdown, options: options) else {
-            var fallback = AttributedString(spacedMarkdown)
-            applyTextSpacing(to: &fallback, fontSize: fontSize)
-            return fallback
+    private static func containsMarkdownSyntax(_ text: String) -> Bool {
+        if text.contains("```") || text.contains("**") || text.contains("__") || text.contains("`") {
+            return true
         }
 
-        applyTextSpacing(to: &attributed, fontSize: fontSize)
-        return attributed
-    }
-
-    /// Markdown treats single newlines as soft breaks (same paragraph). Insert blank lines
-    /// before structural elements so lists, headings, and labels render as separate blocks.
-    static func normalizeParagraphSpacing(_ text: String) -> String {
-        let lines = text.components(separatedBy: "\n")
-        guard lines.count > 1 else { return text }
-
-        var result: [String] = []
-        for (index, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if index > 0, !trimmed.isEmpty, looksLikeBlockStart(trimmed) {
-                if let last = result.last, !last.trimmingCharacters(in: .whitespaces).isEmpty {
-                    result.append("")
-                }
-            }
-            result.append(line)
+        if text.contains("](") || text.contains("|") {
+            return true
         }
-        return result.joined(separator: "\n")
+
+        let blockPattern = #"(^|\n)(#{1,6}\s|[-*+]\s|\d+\.\s|>\s?|---+\s*$)"#
+        return text.range(of: blockPattern, options: .regularExpression) != nil
     }
 
-    private static func looksLikeBlockStart(_ line: String) -> Bool {
-        let patterns = [
-            #"^\d+\.\s"#,
-            #"^\*\*\d+\."#,
-            #"^#{1,6}\s"#,
-            #"^[-*+]\s"#,
-            #"^\*\*[^*]+:\*\*"#,
-        ]
-        return patterns.contains { line.range(of: $0, options: .regularExpression) != nil }
-    }
+    /// Only for plain streamed text with missing newlines — never run on markdown.
+    private static func expandPlainRunOnText(_ text: String) -> String {
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        var expanded = runOnSentencePattern.stringByReplacingMatches(
+            in: text,
+            range: range,
+            withTemplate: "$1\n\n$2"
+        )
 
-    private static func applyTextSpacing(to attributed: inout AttributedString, fontSize: CGFloat) {
-        let style = NSMutableParagraphStyle()
-        style.lineSpacing = 4
-        style.paragraphSpacing = 10
-        var container = AttributeContainer()
-        container.paragraphStyle = style
-        container.font = .systemFont(ofSize: fontSize)
-        attributed.mergeAttributes(container)
+        let lineLabelRange = NSRange(expanded.startIndex..<expanded.endIndex, in: expanded)
+        return inlineLineLabelPattern.stringByReplacingMatches(
+            in: expanded,
+            range: lineLabelRange,
+            withTemplate: "\n$1"
+        )
     }
 }
 
@@ -108,10 +98,12 @@ struct MarkdownMessageText: View {
     var fontSize: CGFloat = 14
 
     var body: some View {
-        Text(AssistantMessageFormatter.attributedString(from: text, fontSize: fontSize))
-            .foregroundStyle(.primary)
-            .multilineTextAlignment(.leading)
-            .lineSpacing(4)
+        Markdown(AssistantMessageFormatter.markdownContent(from: text))
+            .markdownTheme(.gitHub)
+            .markdownTextStyle {
+                FontSize(fontSize)
+                BackgroundColor(nil)
+            }
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
