@@ -1,0 +1,359 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000004 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* MenuBarController.swift */; };
+		B10000000000000000000020 /* PendingAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000022 /* PendingAttachment.swift */; };
+		B10000000000000000000021 /* AttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000023 /* AttachmentStore.swift */; };
+		B10000000000000000000022 /* AttachmentThumbnailStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000024 /* AttachmentThumbnailStrip.swift */; };
+		B10000000000000000000024 /* PopupChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000026 /* PopupChrome.swift */; };
+		B10000000000000000000025 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000027 /* SettingsView.swift */; };
+		B10000000000000000000026 /* SettingsPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000028 /* SettingsPanelController.swift */; };
+		B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000025 /* ClickOutsideDismissal.swift */; };
+		B10000000000000000000001 /* CursorPopupApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* CursorPopupApp.swift */; };
+		B10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* AppModel.swift */; };
+		B10000000000000000000003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AppSettings.swift */; };
+		B10000000000000000000005 /* PopupContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* PopupContentView.swift */; };
+		B10000000000000000000018 /* LogoMarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000020 /* LogoMarkView.swift */; };
+		B10000000000000000000006 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* AgentRunner.swift */; };
+		B10000000000000000000007 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000007 /* GlobalHotKey.swift */; };
+		B10000000000000000000008 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* LaunchAtLogin.swift */; };
+		B10000000000000000000009 /* PanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000009 /* PanelController.swift */; };
+		B10000000000000000000011 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* ChatMessage.swift */; };
+		B10000000000000000000012 /* ChatPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* ChatPanelController.swift */; };
+		B10000000000000000000013 /* FloatingChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* FloatingChatView.swift */; };
+		B10000000000000000000014 /* CursorLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000016 /* CursorLauncher.swift */; };
+		B10000000000000000000015 /* OpenInCursorAgentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000017 /* OpenInCursorAgentButton.swift */; };
+		B10000000000000000000016 /* ChatSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000018 /* ChatSessionStore.swift */; };
+		B10000000000000000000017 /* HistoryKeyHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* HistoryKeyHandler.swift */; };
+		B10000000000000000000019 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000021 /* MenuBarIcon.swift */; };
+		B10000000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* Cursor Popup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Cursor Popup.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000001 /* CursorPopupApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorPopupApp.swift; sourceTree = "<group>"; };
+		F10000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		F10000000000000000000003 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		F10000000000000000000004 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		F10000000000000000000005 /* PopupContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupContentView.swift; sourceTree = "<group>"; };
+		F10000000000000000000020 /* LogoMarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoMarkView.swift; sourceTree = "<group>"; };
+		F10000000000000000000006 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
+		F10000000000000000000007 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		F10000000000000000000008 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
+		F10000000000000000000009 /* PanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10000000000000000000012 /* CursorPopup.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CursorPopup.entitlements; sourceTree = "<group>"; };
+		F10000000000000000000013 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		F10000000000000000000014 /* ChatPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000015 /* FloatingChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingChatView.swift; sourceTree = "<group>"; };
+		F10000000000000000000016 /* CursorLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorLauncher.swift; sourceTree = "<group>"; };
+		F10000000000000000000017 /* OpenInCursorAgentButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenInCursorAgentButton.swift; sourceTree = "<group>"; };
+		F10000000000000000000018 /* ChatSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionStore.swift; sourceTree = "<group>"; };
+		F10000000000000000000019 /* HistoryKeyHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryKeyHandler.swift; sourceTree = "<group>"; };
+		F10000000000000000000021 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
+		F10000000000000000000022 /* PendingAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingAttachment.swift; sourceTree = "<group>"; };
+		F10000000000000000000023 /* AttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentStore.swift; sourceTree = "<group>"; };
+		F10000000000000000000024 /* AttachmentThumbnailStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentThumbnailStrip.swift; sourceTree = "<group>"; };
+		F10000000000000000000028 /* SettingsPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000026 /* PopupChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupChrome.swift; sourceTree = "<group>"; };
+		F10000000000000000000025 /* ClickOutsideDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickOutsideDismissal.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G10000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				G10000000000000000000002 /* CursorPopup */,
+				G10000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G10000000000000000000002 /* CursorPopup */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000001 /* CursorPopupApp.swift */,
+				F10000000000000000000002 /* AppModel.swift */,
+				F10000000000000000000003 /* AppSettings.swift */,
+				F10000000000000000000022 /* PendingAttachment.swift */,
+				F10000000000000000000013 /* ChatMessage.swift */,
+				G10000000000000000000004 /* Views */,
+				G10000000000000000000005 /* Services */,
+				G10000000000000000000006 /* Resources */,
+				F10000000000000000000011 /* Info.plist */,
+				F10000000000000000000012 /* CursorPopup.entitlements */,
+			);
+			path = CursorPopup;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000001 /* Cursor Popup.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000004 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000005 /* PopupContentView.swift */,
+				F10000000000000000000015 /* FloatingChatView.swift */,
+				F10000000000000000000017 /* OpenInCursorAgentButton.swift */,
+				F10000000000000000000020 /* LogoMarkView.swift */,
+				F10000000000000000000024 /* AttachmentThumbnailStrip.swift */,
+				F10000000000000000000026 /* PopupChrome.swift */,
+				F10000000000000000000027 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000006 /* AgentRunner.swift */,
+				F10000000000000000000007 /* GlobalHotKey.swift */,
+				F10000000000000000000008 /* LaunchAtLogin.swift */,
+				F10000000000000000000009 /* PanelController.swift */,
+				F10000000000000000000014 /* ChatPanelController.swift */,
+				F10000000000000000000016 /* CursorLauncher.swift */,
+				F10000000000000000000018 /* ChatSessionStore.swift */,
+				F10000000000000000000019 /* HistoryKeyHandler.swift */,
+				F10000000000000000000021 /* MenuBarIcon.swift */,
+				F10000000000000000000004 /* MenuBarController.swift */,
+				F10000000000000000000023 /* AttachmentStore.swift */,
+				F10000000000000000000025 /* ClickOutsideDismissal.swift */,
+				F10000000000000000000028 /* SettingsPanelController.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000006 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000010 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		T10000000000000000000001 /* CursorPopup */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L10000000000000000000003 /* Build configuration list for PBXNativeTarget "CursorPopup" */;
+			buildPhases = (
+				P10000000000000000000001 /* Sources */,
+				C10000000000000000000001 /* Frameworks */,
+				P10000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CursorPopup;
+			productName = "Cursor Popup";
+			productReference = A10000000000000000000001 /* Cursor Popup.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PR1000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					T10000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = L10000000000000000000001 /* Build configuration list for PBXProject "CursorPopup" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = G10000000000000000000001;
+			productRefGroup = G10000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				T10000000000000000000001 /* CursorPopup */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		P10000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000010 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		P10000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* CursorPopupApp.swift in Sources */,
+				B10000000000000000000002 /* AppModel.swift in Sources */,
+				B10000000000000000000003 /* AppSettings.swift in Sources */,
+				B10000000000000000000005 /* PopupContentView.swift in Sources */,
+				B10000000000000000000018 /* LogoMarkView.swift in Sources */,
+				B10000000000000000000006 /* AgentRunner.swift in Sources */,
+				B10000000000000000000007 /* GlobalHotKey.swift in Sources */,
+				B10000000000000000000008 /* LaunchAtLogin.swift in Sources */,
+				B10000000000000000000009 /* PanelController.swift in Sources */,
+				B10000000000000000000011 /* ChatMessage.swift in Sources */,
+				B10000000000000000000012 /* ChatPanelController.swift in Sources */,
+				B10000000000000000000013 /* FloatingChatView.swift in Sources */,
+				B10000000000000000000014 /* CursorLauncher.swift in Sources */,
+				B10000000000000000000015 /* OpenInCursorAgentButton.swift in Sources */,
+				B10000000000000000000016 /* ChatSessionStore.swift in Sources */,
+				B10000000000000000000017 /* HistoryKeyHandler.swift in Sources */,
+				B10000000000000000000019 /* MenuBarIcon.swift in Sources */,
+				B10000000000000000000004 /* MenuBarController.swift in Sources */,
+				B10000000000000000000020 /* PendingAttachment.swift in Sources */,
+				B10000000000000000000021 /* AttachmentStore.swift in Sources */,
+				B10000000000000000000022 /* AttachmentThumbnailStrip.swift in Sources */,
+				B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */,
+				B10000000000000000000024 /* PopupChrome.swift in Sources */,
+				B10000000000000000000025 /* SettingsView.swift in Sources */,
+				B10000000000000000000026 /* SettingsPanelController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		D10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CursorPopup/CursorPopup.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CursorPopup/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinwolfrom.CursorPopup;
+				PRODUCT_NAME = "Cursor Popup";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CursorPopup/CursorPopup.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CursorPopup/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinwolfrom.CursorPopup;
+				PRODUCT_NAME = "Cursor Popup";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		L10000000000000000000001 /* Build configuration list for PBXProject "CursorPopup" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D10000000000000000000001 /* Debug */,
+				D10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		L10000000000000000000003 /* Build configuration list for PBXNativeTarget "CursorPopup" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D10000000000000000000003 /* Debug */,
+				D10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = PR1000000000000000000001 /* Project object */;
+}
