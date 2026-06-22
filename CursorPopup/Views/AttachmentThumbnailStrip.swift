@@ -1,5 +1,53 @@
 import SwiftUI
 
+private enum AttachmentThumbnailMetrics {
+    static let width: CGFloat = 72
+    static let height: CGFloat = 52
+    static let removeButtonSize: CGFloat = 18
+    /// Room for the remove badge to sit on the corner without using offset (offset breaks hit testing).
+    static let removeButtonBleed: CGFloat = 6
+    static let cellWidth = width + removeButtonBleed
+    static let cellHeight = height + removeButtonBleed
+}
+
+private struct AttachmentThumbnailCell: View {
+    let attachment: PendingAttachment
+    let onRemove: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(
+                width: AttachmentThumbnailMetrics.cellWidth,
+                height: AttachmentThumbnailMetrics.cellHeight
+            )
+            .overlay(alignment: .bottomLeading) {
+                Image(nsImage: attachment.thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(
+                        width: AttachmentThumbnailMetrics.width,
+                        height: AttachmentThumbnailMetrics.height
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .overlay(alignment: .topTrailing) {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(
+                            width: AttachmentThumbnailMetrics.removeButtonSize,
+                            height: AttachmentThumbnailMetrics.removeButtonSize
+                        )
+                        .background(Circle().fill(Color.black.opacity(0.65)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Remove image")
+            }
+    }
+}
+
 struct AttachmentThumbnailStrip: View {
     let attachments: [PendingAttachment]
     let onRemove: (UUID) -> Void
@@ -8,30 +56,14 @@ struct AttachmentThumbnailStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(attachments) { attachment in
-                    ZStack(alignment: .topTrailing) {
-                        Image(nsImage: attachment.thumbnail)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 72, height: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        Button {
-                            onRemove(attachment.id)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(Color.black.opacity(0.65)))
-                        }
-                        .buttonStyle(.plain)
-                        .offset(x: 6, y: -6)
+                    AttachmentThumbnailCell(attachment: attachment) {
+                        onRemove(attachment.id)
                     }
                 }
             }
             .padding(.horizontal, 2)
         }
-        .frame(height: 58)
+        .frame(height: AttachmentThumbnailMetrics.cellHeight)
     }
 }
 
