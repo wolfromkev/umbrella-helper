@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 extension Notification.Name {
     static let menuBarIconVisibilityChanged = Notification.Name("menuBarIconVisibilityChanged")
@@ -9,6 +10,7 @@ final class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private weak var appModel: AppModel?
     private var visibilityObserver: NSObjectProtocol?
+    private var loadingObserver: AnyCancellable?
 
     func start(appModel: AppModel) {
         self.appModel = appModel
@@ -24,6 +26,13 @@ final class MenuBarController: NSObject {
             }
         }
 
+        loadingObserver = appModel.$isLoading
+            .combineLatest(appModel.$isChatBoxVisible, appModel.$isVisible)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _, _, _ in
+                self?.refreshLoadingAppearance()
+            }
+
         setVisible(AppSettings.shared.showMenuBarIcon)
     }
 
@@ -33,8 +42,25 @@ final class MenuBarController: NSObject {
         if visible {
             installIfNeeded()
             statusItem?.isVisible = true
+            refreshLoadingAppearance()
         } else {
             statusItem?.isVisible = false
+        }
+    }
+
+    private func refreshLoadingAppearance() {
+        guard let button = statusItem?.button else { return }
+
+        if appModel?.showsBackgroundLoadingIndicator == true {
+            statusItem?.length = NSStatusItem.variableLength
+            button.image = MenuBarIcon.image()
+            button.title = " …"
+            button.toolTip = "Thinking… — toggle chat to view"
+        } else {
+            statusItem?.length = NSStatusItem.squareLength
+            button.title = ""
+            button.image = MenuBarIcon.image()
+            button.toolTip = "Cursor Popup"
         }
     }
 
@@ -50,7 +76,7 @@ final class MenuBarController: NSObject {
 
         let menu = NSMenu()
         menu.addItem(menuItem("Show Popup", action: #selector(showPopup)))
-        menu.addItem(menuItem("Toggle Chat", action: #selector(toggleChat)))
+        menu.addItem(menuItem("Toggle popup chat", action: #selector(toggleChat)))
         menu.addItem(menuItem("New Notion Task", action: #selector(showNotionTask)))
         menu.addItem(menuItem("Settings…", action: #selector(openSettings)))
         menu.addItem(.separator())

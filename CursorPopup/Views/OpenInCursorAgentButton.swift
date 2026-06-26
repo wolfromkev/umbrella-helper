@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OpenInCursorAgentButton: View {
+    var title: String = "Open in Cursor agent"
     let action: () -> Void
 
     var body: some View {
@@ -8,7 +9,7 @@ struct OpenInCursorAgentButton: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 12, weight: .semibold))
-                Text("Open in Cursor agent")
+                Text(title)
                     .font(.system(size: 13, weight: .medium))
             }
             .foregroundStyle(.secondary)

@@ -1,5 +1,19 @@
 import Foundation
 
+enum ChatBackend: String, CaseIterable, Identifiable {
+    case cursor
+    case openWebUI
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .cursor: return "Cursor agent"
+        case .openWebUI: return "Open WebUI"
+        }
+    }
+}
+
 struct ChatMessage: Identifiable, Equatable {
     enum Role: String {
         case user
@@ -53,6 +67,20 @@ enum CursorHandoffMode: String, CaseIterable, Identifiable {
         case .formattedHistory: return "Formatted history"
         case .lastQuestion: return "Last question only"
         case .fullTranscript: return "Full transcript"
+        }
+    }
+}
+
+enum CursorHandoffTarget: String, CaseIterable, Identifiable {
+    case agentsWindow
+    case ideChat
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .agentsWindow: return "Agents window"
+        case .ideChat: return "IDE chat sidebar"
         }
     }
 }

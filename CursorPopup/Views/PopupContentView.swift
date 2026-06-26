@@ -23,7 +23,7 @@ struct PopupContentView: View {
             inputBar
 
             if !showsInlineResponse {
-                OpenInCursorAgentButton {
+                OpenInCursorAgentButton(title: model.externalChatHandoffLabel) {
                     model.openInCursorAgent()
                 }
             }
@@ -70,7 +70,7 @@ struct PopupContentView: View {
 
                 if model.usesFloatingChatBox {
                     Button("Chat") {
-                        model.showChatBox()
+                        model.showChatBox(resetToNewChat: true)
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)

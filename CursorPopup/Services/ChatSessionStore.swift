@@ -11,6 +11,10 @@ enum ChatSessionStore {
     private static let maxSessions = 40
 
     static func loadSessions(for workspacePath: String) -> [SavedChatSession] {
+        if AppSettings.shared.usesOpenWebUI {
+            return LocalChatSessionStore.loadSessions(for: workspacePath)
+        }
+
         guard let transcriptsRoot = transcriptsDirectory(for: workspacePath) else { return [] }
 
         let fileManager = FileManager.default

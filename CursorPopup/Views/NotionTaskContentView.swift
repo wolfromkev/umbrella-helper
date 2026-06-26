@@ -172,7 +172,9 @@ struct NotionTaskContentView: View {
     }
 
     private var dueDateDisplayText: String {
-        let date = model.notionDueDate ?? Date()
+        guard let date = model.notionDueDate else {
+            return "Date"
+        }
 
         if dueDateShowsActualDate {
             return Self.formatDueDate(date)
@@ -455,9 +457,14 @@ struct NotionTaskContentView: View {
                 direction: direction
             )
         case .dueDate:
-            dueDateShowsActualDate = true
-            let dueDate = model.notionDueDate ?? Date()
-            model.notionDueDate = Calendar.current.date(byAdding: .day, value: direction, to: dueDate) ?? dueDate
+            if model.notionDueDate == nil {
+                model.notionDueDate = Date()
+                dueDateShowsActualDate = false
+            } else {
+                dueDateShowsActualDate = true
+                let dueDate = model.notionDueDate!
+                model.notionDueDate = Calendar.current.date(byAdding: .day, value: direction, to: dueDate) ?? dueDate
+            }
         }
     }
 

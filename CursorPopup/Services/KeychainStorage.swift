@@ -5,12 +5,27 @@ enum KeychainStorage {
     private static let notionTokenService = "com.cursorpopup.notion-token"
     private static let notionTokenAccount = "default"
     private static let notionTokenLabel = "Cursor Popup Notion Token"
+    private static let openWebUIAPIService = "com.cursorpopup.openwebui-api-key"
+    private static let openWebUIAPIAccount = "default"
+    private static let openWebUIAPILabel = "Cursor Popup Open WebUI API Key"
+
+    /// Open WebUI account API key (server auth). Stored only in Keychain — never UserDefaults or repo files.
+    static var openWebUIAPIKey: String? {
+        get { read(service: openWebUIAPIService, account: openWebUIAPIAccount) }
+        set {
+            if let newValue, !newValue.isEmpty {
+                save(newValue, service: openWebUIAPIService, account: openWebUIAPIAccount, label: openWebUIAPILabel)
+            } else {
+                delete(service: openWebUIAPIService, account: openWebUIAPIAccount)
+            }
+        }
+    }
 
     static var notionToken: String? {
         get { read(service: notionTokenService, account: notionTokenAccount) }
         set {
             if let newValue, !newValue.isEmpty {
-                save(newValue, service: notionTokenService, account: notionTokenAccount)
+                save(newValue, service: notionTokenService, account: notionTokenAccount, label: notionTokenLabel)
             } else {
                 delete(service: notionTokenService, account: notionTokenAccount)
             }
@@ -26,7 +41,7 @@ enum KeychainStorage {
         // Notion token is stored in Keychain via Settings.
     }
 
-    private static func save(_ value: String, service: String, account: String) {
+    private static func save(_ value: String, service: String, account: String, label: String) {
         delete(service: service, account: account)
 
         guard let data = value.data(using: .utf8) else { return }
@@ -35,7 +50,7 @@ enum KeychainStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrLabel as String: notionTokenLabel,
+            kSecAttrLabel as String: label,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]

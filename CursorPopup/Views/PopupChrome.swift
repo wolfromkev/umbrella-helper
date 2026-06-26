@@ -43,16 +43,42 @@ struct SettingsToolbarButton: View {
     }
 }
 
+struct NewChatToolbarButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(nsColor: NSColor(calibratedWhite: 0.22, alpha: 0.95)))
+                )
+        }
+        .buttonStyle(.plain)
+        .help("New Chat")
+    }
+}
+
 struct WorkspaceNavigatorView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        Text(model.workspaceLabel)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .frame(maxWidth: 96)
-            .help("Current workspace folder")
+        VStack(alignment: .leading, spacing: 2) {
+            Text(model.workspaceLabel)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            if let hint = model.contextNavigationHint {
+                Text(hint)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.secondary.opacity(0.7))
+            }
+        }
+        .frame(maxWidth: 120, alignment: .leading)
+        .help(model.settings.usesOpenWebUI ? "Current Open WebUI project" : "Current workspace folder")
     }
 }
 
@@ -100,13 +126,20 @@ struct InputBarTrailingIndicator: View {
 
     var body: some View {
         if model.isBrandNewChat {
-            Text(model.workspaceLabel)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: 140, alignment: .trailing)
-                .padding(.horizontal, 2)
-                .help("Current workspace folder")
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(model.workspaceLabel)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 140, alignment: .trailing)
+                if let hint = model.contextNavigationHint {
+                    Text(hint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.secondary.opacity(0.7))
+                }
+            }
+            .padding(.horizontal, 2)
+            .help(model.settings.usesOpenWebUI ? "Current Open WebUI project" : "Current workspace folder")
         } else {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(model.historyLabel)

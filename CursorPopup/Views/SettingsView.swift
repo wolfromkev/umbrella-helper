@@ -9,8 +9,8 @@ private enum SettingsColors {
 }
 
 private enum ShortcutTarget {
-    case chatBox
     case notionTask
+    case newChat
 }
 
 struct SettingsView: View {
@@ -18,18 +18,24 @@ struct SettingsView: View {
     @AppStorage(AppSettings.showMenuBarIconKey) private var showMenuBarIcon = true
     @AppStorage(AppSettings.playResponseSoundKey) private var playResponseSound = true
     @AppStorage(AppSettings.responseCompletionSoundKey) private var responseCompletionSound = CompletionSound.defaultSound.rawValue
-    @State private var workspaceFolders = AppSettings.shared.workspaceFolders
-    @State private var defaultWorkspacePath = AppSettings.shared.defaultWorkspacePath
     @State private var launchAtLogin = AppSettings.shared.launchAtLogin
-    @State private var chatBoxHotKey = AppSettings.shared.chatBoxHotKey
     @State private var notionTaskHotKey = AppSettings.shared.notionTaskHotKey
+    @State private var newChatHotKey = AppSettings.shared.newChatHotKey
     @State private var savedNotionToken = KeychainStorage.notionToken ?? ""
     @State private var savedNotionDatabaseID = AppSettings.shared.notionDatabaseID
     @State private var isEditingNotionCredentials = false
     @State private var notionTokenDraft = ""
     @State private var notionDatabaseIDDraft = ""
     @State private var responseDisplayMode = AppSettings.shared.responseDisplayMode
-    @State private var cursorHandoffMode = AppSettings.shared.cursorHandoffMode
+    @State private var openWebUIBaseURL = AppSettings.shared.openWebUIBaseURL
+    @State private var openWebUIModel = AppSettings.shared.openWebUIModel
+    @State private var savedOpenWebUIAPIKey = KeychainStorage.openWebUIAPIKey ?? ""
+    @State private var isEditingOpenWebUICredentials = false
+    @State private var openWebUIAPIKeyDraft = ""
+    @State private var availableOpenWebUIModels: [String] = []
+    @State private var isLoadingOpenWebUIModels = false
+    @State private var openWebUIStatusMessage: String?
+    @State private var openWebUISyncChats = AppSettings.shared.openWebUISyncChats
     @State private var recordingTarget: ShortcutTarget?
     @State private var shortcutConflict: String?
     @State private var accessibilityGranted = SystemPermissions.isAccessibilityGranted
@@ -38,24 +44,8 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                settingsSection("Workspace") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(workspaceFolders, id: \.self) { folder in
-                            workspaceFolderRow(folder)
-                            if folder != workspaceFolders.last {
-                                rowDivider
-                            }
-                        }
-
-                        Button("Add folder…") {
-                            addWorkspaceFolder()
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, workspaceFolders.isEmpty ? 0 : 4)
-                    }
-
-                    footerText("Use the arrows in the chat bar to switch between folders. The starred folder opens when the app launches; closing chat keeps your current folder until you quit.")
+                settingsSection("Open WebUI") {
+                    openWebUISettings
                 }
 
                 settingsSection("Response") {
@@ -73,21 +63,6 @@ struct SettingsView: View {
                     }
 
                     footerText("Floating chat opens a separate window you can drag and keep open while you work. Inline mode shows replies above the input bar.")
-
-                    settingsRow("Open in Cursor") {
-                        Picker("", selection: $cursorHandoffMode) {
-                            ForEach(CursorHandoffMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 240)
-                        .onChange(of: cursorHandoffMode) { newValue in
-                            AppSettings.shared.cursorHandoffMode = newValue
-                        }
-                    }
-
-                    footerText("Popup chats run through the headless agent CLI and do not appear in Cursor's chat sidebar. Open in Cursor hands the conversation off via deeplink. Formatted history is the cleanest default; use Last question only for a short follow-up.")
                 }
 
                 settingsSection("Sounds") {
@@ -189,24 +164,24 @@ struct SettingsView: View {
                 }
 
                 settingsSection("Shortcuts") {
-                    settingsRow("Chat box") {
+                    settingsRow("Notion task") {
                         HotKeyRecorderView(
-                            binding: $chatBoxHotKey,
-                            isRecording: recordingTarget == .chatBox,
-                            onBegin: { beginRecording(.chatBox) },
-                            onCommit: { commitHotKey($0, target: .chatBox) },
+                            binding: $notionTaskHotKey.asOptional,
+                            isRecording: recordingTarget == .notionTask,
+                            onBegin: { beginRecording(.notionTask) },
+                            onCommit: { commitHotKey($0, target: .notionTask) },
                             onCancel: { cancelRecording() }
                         )
                     }
 
                     rowDivider
 
-                    settingsRow("Notion task") {
+                    settingsRow("New chat") {
                         HotKeyRecorderView(
-                            binding: $notionTaskHotKey,
-                            isRecording: recordingTarget == .notionTask,
-                            onBegin: { beginRecording(.notionTask) },
-                            onCommit: { commitHotKey($0, target: .notionTask) },
+                            binding: $newChatHotKey.asOptional,
+                            isRecording: recordingTarget == .newChat,
+                            onBegin: { beginRecording(.newChat) },
+                            onCommit: { commitHotKey($0, target: .newChat) },
                             onCancel: { cancelRecording() }
                         )
                     }
@@ -218,7 +193,7 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    footerText("Click a shortcut to record a new one. Press Esc to cancel.")
+                    footerText(shortcutsFooter)
                 }
 
                 settingsSection("Menu Bar") {
@@ -232,7 +207,7 @@ struct SettingsView: View {
                             )
                         }
 
-                    footerText("When hidden, use \(chatBoxHotKey.displayName) and \(notionTaskHotKey.displayName) as usual. Open Cursor Popup from Applications to reach Settings and restore the icon.")
+                    footerText(menuBarShortcutFooter)
                 }
 
                 settingsSection("Startup") {
@@ -269,11 +244,11 @@ struct SettingsView: View {
                         }
                     }
 
-                    footerText("Accessibility lets popups follow your cursor across displays and dismiss when you click outside. Open in Cursor uses the Cursor app directly — it does not need an Automation entry, so Cursor Popup will not appear there.")
+                    footerText("Accessibility lets popups follow your cursor across displays and dismiss when you click outside.")
                 }
 
                 settingsSection("About") {
-                    footerText("Cursor Popup sends questions to the Cursor agent in ask mode against your configured workspace folder. Each popup opens a fresh chat; follow-ups continue that session. Full popup history is available in the popup via ↑ / ↓.")
+                    footerText(aboutFooter)
                 }
 
                 HStack(spacing: 10) {
@@ -295,11 +270,14 @@ struct SettingsView: View {
         .background(SettingsColors.window)
         .onAppear {
             launchAtLogin = LaunchAtLoginManager.isEnabled
-            workspaceFolders = AppSettings.shared.workspaceFolders
-            defaultWorkspacePath = AppSettings.shared.defaultWorkspacePath
             responseDisplayMode = AppSettings.shared.responseDisplayMode
-            chatBoxHotKey = AppSettings.shared.chatBoxHotKey
+            openWebUIBaseURL = AppSettings.shared.openWebUIBaseURL
+            openWebUIModel = AppSettings.shared.openWebUIModel
+            openWebUISyncChats = AppSettings.shared.openWebUISyncChats
+            savedOpenWebUIAPIKey = KeychainStorage.openWebUIAPIKey ?? ""
+            isEditingOpenWebUICredentials = false
             notionTaskHotKey = AppSettings.shared.notionTaskHotKey
+            newChatHotKey = AppSettings.shared.newChatHotKey
             reloadSavedNotionCredentials()
             isEditingNotionCredentials = false
             refreshPermissionStatus()
@@ -309,6 +287,182 @@ struct SettingsView: View {
         }
         .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in
             refreshPermissionStatus()
+        }
+    }
+
+    private var shortcutsFooter: String {
+        "Click a shortcut to record a new one. Notion and popup new-chat shortcuts stay active unless cleared later. Press Esc to cancel while recording."
+    }
+
+    private var aboutFooter: String {
+        "Cursor Popup sends questions to your local Open WebUI server. With sync enabled, chats are stored in Open WebUI and open directly in the desktop app. Use ←→ to pick a project on new chats, and ↑↓ for history."
+    }
+
+    @ViewBuilder
+    private var openWebUISettings: some View {
+        rowDivider
+
+        settingsRow("Server URL") {
+            TextField("http://localhost:8080", text: $openWebUIBaseURL)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 280)
+                .onChange(of: openWebUIBaseURL) { newValue in
+                    AppSettings.shared.openWebUIBaseURL = newValue
+                }
+        }
+
+        rowDivider
+
+        if isEditingOpenWebUICredentials {
+            settingsRow("Open WebUI API key") {
+                SecureField("sk-...", text: $openWebUIAPIKeyDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 280)
+            }
+
+            HStack(spacing: 8) {
+                Button("Save") {
+                    saveOpenWebUICredentials()
+                }
+                .disabled(openWebUIAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button("Cancel") {
+                    cancelEditingOpenWebUICredentials()
+                }
+            }
+            .padding(.top, 2)
+        } else {
+            settingsRow("Open WebUI API key") {
+                Text(maskedOpenWebUIAPIKey(savedOpenWebUIAPIKey))
+                    .foregroundStyle(savedOpenWebUIAPIKey.isEmpty ? Color.orange : .secondary)
+                    .textSelection(.enabled)
+            }
+
+            Button("Edit Open WebUI API key…") {
+                beginEditingOpenWebUICredentials()
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.top, 2)
+        }
+
+        rowDivider
+
+        settingsRow("Model") {
+            HStack(spacing: 8) {
+                if availableOpenWebUIModels.isEmpty {
+                    TextField("llama3.2", text: $openWebUIModel)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 180)
+                        .onChange(of: openWebUIModel) { newValue in
+                            AppSettings.shared.openWebUIModel = newValue
+                        }
+                } else {
+                    Picker("", selection: $openWebUIModel) {
+                        if openWebUIModel.isEmpty {
+                            Text("Select a model").tag("")
+                        }
+                        ForEach(availableOpenWebUIModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 180)
+                    .onChange(of: openWebUIModel) { newValue in
+                        AppSettings.shared.openWebUIModel = newValue
+                    }
+                }
+
+                Button(isLoadingOpenWebUIModels ? "Loading…" : "Refresh") {
+                    refreshOpenWebUIModels()
+                }
+                .disabled(isLoadingOpenWebUIModels)
+            }
+        }
+
+        if let openWebUIStatusMessage {
+            Text(openWebUIStatusMessage)
+                .font(.caption)
+                .foregroundStyle(openWebUIStatusMessage.contains("Could not") ? .red : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Toggle("Sync chats with Open WebUI", isOn: $openWebUISyncChats)
+            .toggleStyle(.switch)
+            .onChange(of: openWebUISyncChats) { newValue in
+                AppSettings.shared.openWebUISyncChats = newValue
+                appModel.refreshWorkspaceSessionCache()
+                appModel.refreshOpenWebUIProjects()
+            }
+
+        footerText("This is your Open WebUI account API key (Account → Settings → Account → API keys). It authenticates Cursor Popup with your local Open WebUI server — not an OpenAI, Ollama, or other model provider key. The key is saved in macOS Keychain only and is never written to project files or git.")
+    }
+
+    private func maskedOpenWebUIAPIKey(_ key: String) -> String {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Not configured" }
+        let visibleSuffix = trimmed.suffix(4)
+        return "••••••••\(visibleSuffix)"
+    }
+
+    private func beginEditingOpenWebUICredentials() {
+        openWebUIAPIKeyDraft = savedOpenWebUIAPIKey
+        isEditingOpenWebUICredentials = true
+    }
+
+    private func cancelEditingOpenWebUICredentials() {
+        openWebUIAPIKeyDraft = savedOpenWebUIAPIKey
+        isEditingOpenWebUICredentials = false
+    }
+
+    private func saveOpenWebUICredentials() {
+        let key = openWebUIAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        KeychainStorage.openWebUIAPIKey = key
+        savedOpenWebUIAPIKey = key
+        isEditingOpenWebUICredentials = false
+    }
+
+    private func refreshOpenWebUIModels() {
+        let baseURL = openWebUIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = (isEditingOpenWebUICredentials ? openWebUIAPIKeyDraft : savedOpenWebUIAPIKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !baseURL.isEmpty else {
+            openWebUIStatusMessage = "Enter a server URL first."
+            return
+        }
+        guard !apiKey.isEmpty else {
+            openWebUIStatusMessage = "Add your API key first."
+            return
+        }
+
+        isLoadingOpenWebUIModels = true
+        openWebUIStatusMessage = nil
+
+        Task {
+            do {
+                let models = try await OpenWebUIRunner.fetchModels(baseURL: baseURL, apiKey: apiKey)
+                await MainActor.run {
+                    availableOpenWebUIModels = models
+                    isLoadingOpenWebUIModels = false
+                    if models.isEmpty {
+                        openWebUIStatusMessage = "No models returned. Enter the model ID manually."
+                    } else if openWebUIModel.isEmpty || !models.contains(openWebUIModel) {
+                        openWebUIModel = models[0]
+                        AppSettings.shared.openWebUIModel = models[0]
+                        openWebUIStatusMessage = "Loaded \(models.count) model(s)."
+                    } else {
+                        openWebUIStatusMessage = "Loaded \(models.count) model(s)."
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    availableOpenWebUIModels = []
+                    isLoadingOpenWebUIModels = false
+                    openWebUIStatusMessage = "Could not load models: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
@@ -374,42 +528,6 @@ struct SettingsView: View {
             .frame(width: 16, height: 16)
     }
 
-    private func workspaceFolderRow(_ folder: String) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Button {
-                setDefaultWorkspace(folder)
-            } label: {
-                Image(systemName: defaultWorkspacePath == folder ? "star.fill" : "star")
-                    .font(.system(size: 13))
-                    .foregroundStyle(defaultWorkspacePath == folder ? Color(red: 0.98, green: 0.55, blue: 0.18) : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Default on launch")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(AppSettings.shared.displayName(for: folder))
-                    .font(.system(size: 13, weight: .medium))
-                Text(folder)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if workspaceFolders.count > 1 {
-                Button {
-                    removeWorkspaceFolder(folder)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Remove folder")
-            }
-        }
-    }
-
     private var notionCredentialsCanSave: Bool {
         let token = notionTokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let databaseID = notionDatabaseIDDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -456,45 +574,6 @@ struct SettingsView: View {
         return "••••••••\(visibleSuffix)"
     }
 
-    private func persistWorkspaceFolders() {
-        AppSettings.shared.workspaceFolders = workspaceFolders
-        AppSettings.shared.defaultWorkspacePath = defaultWorkspacePath
-        appModel.syncActiveWorkspaceWithSettings()
-    }
-
-    private func setDefaultWorkspace(_ folder: String) {
-        defaultWorkspacePath = folder
-        AppSettings.shared.defaultWorkspacePath = folder
-    }
-
-    private func addWorkspaceFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Add"
-        panel.message = "Choose a folder to chat against in Cursor."
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        let path = url.path
-        guard !workspaceFolders.contains(path) else { return }
-
-        workspaceFolders.append(path)
-        if workspaceFolders.count == 1 {
-            defaultWorkspacePath = path
-        }
-        persistWorkspaceFolders()
-    }
-
-    private func removeWorkspaceFolder(_ folder: String) {
-        workspaceFolders.removeAll { $0 == folder }
-        if defaultWorkspacePath == folder {
-            defaultWorkspacePath = workspaceFolders.first ?? AppSettings.defaultWorkspace
-        }
-        persistWorkspaceFolders()
-    }
-
     private func beginRecording(_ target: ShortcutTarget) {
         shortcutConflict = nil
         recordingTarget = target
@@ -502,34 +581,38 @@ struct SettingsView: View {
 
     private func cancelRecording() {
         recordingTarget = nil
-        chatBoxHotKey = AppSettings.shared.chatBoxHotKey
         notionTaskHotKey = AppSettings.shared.notionTaskHotKey
+        newChatHotKey = AppSettings.shared.newChatHotKey
+    }
+
+    private var menuBarShortcutFooter: String {
+        "When hidden, use \(notionTaskHotKey.displayName) for Notion tasks. Open Cursor Popup from Applications to reach Settings and restore the icon."
     }
 
     private func commitHotKey(_ binding: HotKeyBinding, target: ShortcutTarget) {
         recordingTarget = nil
 
-        let others: [(ShortcutTarget, HotKeyBinding)] = [
-            (.chatBox, chatBoxHotKey),
+        let others: [(ShortcutTarget, HotKeyBinding?)] = [
             (.notionTask, notionTaskHotKey),
+            (.newChat, newChatHotKey),
         ].filter { $0.0 != target }
 
-        if others.contains(where: { $0.1 == binding }) {
+        if others.compactMap(\.1).contains(where: { $0 == binding }) {
             shortcutConflict = "Each shortcut must be unique."
-            chatBoxHotKey = AppSettings.shared.chatBoxHotKey
             notionTaskHotKey = AppSettings.shared.notionTaskHotKey
+            newChatHotKey = AppSettings.shared.newChatHotKey
             return
         }
 
         shortcutConflict = nil
 
         switch target {
-        case .chatBox:
-            chatBoxHotKey = binding
-            AppSettings.shared.chatBoxHotKey = binding
         case .notionTask:
             notionTaskHotKey = binding
             AppSettings.shared.notionTaskHotKey = binding
+        case .newChat:
+            newChatHotKey = binding
+            AppSettings.shared.newChatHotKey = binding
         }
 
         appModel.reloadHotKeys()

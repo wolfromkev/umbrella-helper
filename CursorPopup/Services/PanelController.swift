@@ -144,6 +144,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             let window = notification.object as? NSWindow,
             window === panel,
             model?.isVisible == true,
+            model?.preventsAutoDismiss != true,
             !isClosing
         else {
             return
@@ -154,6 +155,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 let self,
                 let panel = self.panel,
                 self.model?.isVisible == true,
+                self.model?.preventsAutoDismiss != true,
                 !panel.isKeyWindow,
                 !self.isClosing
             else {
@@ -207,6 +209,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard let panel else { return }
 
         clickOutsideDismissal.activate(for: panel) { [weak self] in
+            guard self?.model?.preventsAutoDismiss != true else { return }
             self?.model?.hidePopup()
         }
 

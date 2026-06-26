@@ -29,6 +29,6 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "$TARGET"
 ditto "$BUILT_APP" "$TARGET"
 
-echo "Done. Press F5 (default) to open the chat box."
+echo "Done. Press F4 (default) for Notion tasks — configure shortcuts in Settings."
 echo "Installed: $TARGET"
 echo "Launch the app once from Applications if login item registration needs approval."

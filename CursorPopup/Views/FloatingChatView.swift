@@ -55,7 +55,7 @@ struct FloatingChatView: View {
             messagesList
             Divider().opacity(0.12)
             expandedInputSection
-            OpenInCursorAgentButton {
+            OpenInCursorAgentButton(title: model.externalChatHandoffLabel) {
                 model.openInCursorAgent()
             }
             .padding(.horizontal, 8)
@@ -109,7 +109,7 @@ struct FloatingChatView: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
-                if model.canBrowseWorkspaces {
+                if model.canBrowseWorkspaces || model.isBrandNewChat {
                     WorkspaceNavigatorView()
                 } else {
                     Text(model.workspaceLabel)
@@ -123,6 +123,10 @@ struct FloatingChatView: View {
                 }
             }
             Spacer()
+
+            NewChatToolbarButton {
+                model.startNewChat()
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

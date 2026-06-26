@@ -2,8 +2,17 @@ import AppKit
 import Carbon
 import SwiftUI
 
+extension Binding where Value == HotKeyBinding {
+    var asOptional: Binding<HotKeyBinding?> {
+        Binding<HotKeyBinding?>(
+            get: { wrappedValue },
+            set: { if let value = $0 { wrappedValue = value } }
+        )
+    }
+}
+
 struct HotKeyRecorderView: View {
-    @Binding var binding: HotKeyBinding
+    @Binding var binding: HotKeyBinding?
     let isRecording: Bool
     let onBegin: () -> Void
     let onCommit: (HotKeyBinding) -> Void
@@ -21,7 +30,7 @@ struct HotKeyRecorderView: View {
                 startRecording()
             }
         } label: {
-            Text(isRecording ? "Press shortcut…" : binding.displayName)
+            Text(isRecording ? "Press shortcut…" : (binding?.displayName ?? "Disabled"))
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundStyle(isRecording ? Color.accentColor : Color.secondary)
                 .frame(minWidth: 88, alignment: .center)

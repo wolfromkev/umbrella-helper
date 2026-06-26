@@ -1,6 +1,6 @@
 # Notion quick task (optional)
 
-Press **F6** (default) to open a compact task popup. This is optional — the chat features work without Notion.
+Press **F4** (default) to open a compact task popup. This is optional — the chat features work without Notion.
 
 ## Setup
 
@@ -25,4 +25,4 @@ If a field is missing, the popup still creates a page with the properties it fin
 
 ## Privacy
 
-The integration token is stored in the macOS Keychain. Task text is sent to Notion’s API only when you submit from the F6 popup.
+The integration token is stored in the macOS Keychain. Task text is sent to Notion’s API only when you submit from the Notion task popup.

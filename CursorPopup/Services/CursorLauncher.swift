@@ -4,12 +4,29 @@ import Foundation
 enum CursorLauncher {
     private static let cursorAppPath = "/Applications/Cursor.app"
     private static let maxDeeplinkLength = 8_000
+    private static let workspaceOpenDelay: TimeInterval = 1.0
+    private static let agentsWindowOpenDelay: TimeInterval = 0.9
+
+    /// Opens Cursor's Glass chat window, optionally focusing the configured workspace first.
+    static func openCursorChat(workspace: String) {
+        let workspacePath = (workspace as NSString).expandingTildeInPath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let openedWorkspace = !workspacePath.isEmpty && openCursorWorkspace(workspacePath, reuseWindow: true)
+
+        guard let glassURL = deeplinkURL(path: "/glass") else { return }
+
+        let delay = openedWorkspace ? workspaceOpenDelay : 0.15
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            NSWorkspace.shared.open(glassURL)
+        }
+    }
 
     static func openInCursorAgent(
         workspace: String,
         messages: [ChatMessage],
         sessionID: String? = nil,
-        handoffMode: CursorHandoffMode = .formattedHistory
+        handoffMode: CursorHandoffMode = .formattedHistory,
+        handoffTarget: CursorHandoffTarget = .agentsWindow
     ) {
         let prompt = buildHandoffPrompt(
             from: messages,
@@ -17,27 +34,69 @@ enum CursorLauncher {
             handoffMode: handoffMode
         )
 
-        if runCursorCLI(arguments: ["--glass", "-n", workspace]) {
-            handoffPrompt(prompt, delay: 0.45)
-            return
-        }
-
-        openWorkspaceWithCursorApp(workspace)
-        handoffPrompt(prompt, delay: 0.5)
-    }
-
-    private static func handoffPrompt(_ prompt: String, delay: TimeInterval) {
         guard !prompt.isEmpty else { return }
 
+        let workspacePath = (workspace as NSString).expandingTildeInPath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let openedWorkspace = !workspacePath.isEmpty && openCursorWorkspace(workspacePath, reuseWindow: false)
+
+        let initialDelay = openedWorkspace ? workspaceOpenDelay : 0.15
+        switch handoffTarget {
+        case .agentsWindow:
+            handoffToAgentsWindow(prompt, delay: initialDelay)
+        case .ideChat:
+            handoffPrompt(prompt, mode: "agent", delay: initialDelay)
+        }
+    }
+
+    private static func openCursorWorkspace(_ path: String, reuseWindow: Bool) -> Bool {
+        let windowFlag = reuseWindow ? "-r" : "-n"
+        if runCursorCLI(arguments: [windowFlag, path]) {
+            return true
+        }
+        return openWorkspaceWithCursorApp(path)
+    }
+
+    private static func handoffPrompt(_ prompt: String, mode: String? = nil, delay: TimeInterval) {
+        guard let url = promptDeeplinkURL(for: prompt, mode: mode) else { return }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard
-                let encoded = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                let url = URL(string: "cursor://anysphere.cursor-deeplink/prompt?text=\(encoded)")
-            else {
-                return
-            }
             NSWorkspace.shared.open(url)
         }
+    }
+
+    /// Opens the Agents window first, then sends the prompt deeplink so Glass can create a new agent.
+    private static func handoffToAgentsWindow(_ prompt: String, delay: TimeInterval) {
+        guard
+            let glassURL = deeplinkURL(path: "/glass"),
+            let promptURL = promptDeeplinkURL(for: prompt)
+        else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            NSWorkspace.shared.open(glassURL)
+            DispatchQueue.main.asyncAfter(deadline: .now() + agentsWindowOpenDelay) {
+                NSWorkspace.shared.open(promptURL)
+            }
+        }
+    }
+
+    private static func deeplinkURL(path: String, queryItems: [URLQueryItem] = []) -> URL? {
+        var components = URLComponents()
+        components.scheme = "cursor"
+        components.host = "anysphere.cursor-deeplink"
+        components.path = path
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        return components.url
+    }
+
+    private static func promptDeeplinkURL(for prompt: String, mode: String? = nil) -> URL? {
+        var queryItems = [URLQueryItem(name: "text", value: prompt)]
+        if let mode {
+            queryItems.append(URLQueryItem(name: "mode", value: mode))
+        }
+        return deeplinkURL(path: "/prompt", queryItems: queryItems)
     }
 
     @discardableResult
@@ -89,8 +148,12 @@ enum CursorLauncher {
         sessionID: String? = nil,
         handoffMode: CursorHandoffMode = .formattedHistory
     ) -> String {
-        let trimmedMessages = messages.filter {
-            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let trimmedMessages = messages.compactMap { message -> ChatMessage? in
+            let text = handoffText(for: message)
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            var copy = message
+            copy.text = text
+            return copy
         }
 
         guard !trimmedMessages.isEmpty else { return "" }
@@ -176,8 +239,21 @@ enum CursorLauncher {
         return String(prompt[..<end]).trimmingCharacters(in: .whitespacesAndNewlines) + suffix
     }
 
+    private static func handoffText(for message: ChatMessage) -> String {
+        switch message.role {
+        case .user:
+            return message.text
+        case .assistant:
+            return AssistantMessageFormatter.displayText(from: message.text)
+        }
+    }
+
     private static func locateCursorCLI() -> String? {
-        let candidates = ["/usr/local/bin/cursor", "/opt/homebrew/bin/cursor"]
+        let candidates = [
+            "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+            "/usr/local/bin/cursor",
+            "/opt/homebrew/bin/cursor",
+        ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }

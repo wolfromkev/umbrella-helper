@@ -10,11 +10,11 @@ A native macOS menu bar app that opens a floating chat bar and sends prompts to 
 
 ## Features
 
-- **Global hotkey:** `F5` toggles the chat box (customizable in Settings)
+- **Global hotkey:** `F5` opens Cursor's Agents chat window (customizable in Settings)
 - **Floating or inline chat:** stream replies in a separate panel or below the input bar
 - **Workspace folders:** point at any project directory; use `←` / `→` in the chat bar to switch
 - **Chat history:** `↑` / `↓` browse past sessions (loaded from Cursor agent transcripts)
-- **Optional Notion quick task:** `F6` opens a compact task capture popup (integration token + database ID in Settings)
+- **Optional Notion quick task:** `F4` opens a compact task capture popup (integration token + database ID in Settings)
 - **Menu bar:** show popup, toggle chat, settings, restart, quit
 - **Markdown replies:** assistant messages render markdown; CLI status lines are hidden while thinking
 
@@ -49,11 +49,11 @@ The script builds a Release app, copies it to `/Applications/Cursor Popup.app`, 
 4. Under **Permissions**, enable **Accessibility** for Cursor Popup (needed for popup placement and click-outside dismiss).
 5. *(Optional)* Under **Notion**, add an [integration token](https://www.notion.so/my-integrations) and your tasks database ID. See [docs/NOTION.md](docs/NOTION.md).
 
-Default shortcuts: **F5** chat · **F6** Notion task (both configurable).
+Default shortcuts: **F4** Notion task · **⌘⇧N** new popup chat (Cursor chat disabled by default; all configurable in Settings).
 
 ## Usage
 
-1. Press **F5** (or your chat shortcut) to open the chat bar.
+1. Press **F5** (or your Cursor chat shortcut) to open Cursor's Agents window, or use **Toggle popup chat** from the menu bar for the built-in chat box.
 2. Type a question and press **Return**, or click the send button.
 3. Press **Escape** to dismiss.
 4. Use **↑** / **↓** for chat history and **←** / **→** to change workspace when multiple folders are configured.

@@ -134,7 +134,8 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
         guard
             let window = notification.object as? NSWindow,
             window === panel,
-            model?.isChatBoxVisible == true
+            model?.isChatBoxVisible == true,
+            model?.preventsAutoDismiss != true
         else {
             return
         }
@@ -144,6 +145,7 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
                 let self,
                 let panel = self.panel,
                 self.model?.isChatBoxVisible == true,
+                self.model?.preventsAutoDismiss != true,
                 !panel.isKeyWindow,
                 !self.isClosing
             else {
@@ -213,6 +215,7 @@ final class ChatPanelController: NSObject, NSWindowDelegate {
         guard let panel else { return }
 
         clickOutsideDismissal.activate(for: panel) { [weak self] in
+            guard self?.model?.preventsAutoDismiss != true else { return }
             self?.model?.hideChatBox()
         }
 

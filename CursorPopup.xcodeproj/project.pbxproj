@@ -43,6 +43,10 @@
 		B10000000000000000000035 /* GeometricPencil.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000037 /* GeometricPencil.swift */; };
 		B10000000000000000000036 /* ResponseSoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000038 /* ResponseSoundPlayer.swift */; };
 		B10000000000000000000037 /* AssistantMessageFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000039 /* AssistantMessageFormatter.swift */; };
+		B10000000000000000000038 /* OpenWebUIRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000040 /* OpenWebUIRunner.swift */; };
+		B10000000000000000000039 /* LocalChatSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000041 /* LocalChatSessionStore.swift */; };
+		B10000000000000000000041 /* OpenWebUIChatClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000043 /* OpenWebUIChatClient.swift */; };
+		B10000000000000000000040 /* OpenWebUILauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000042 /* OpenWebUILauncher.swift */; };
 		B10000000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -86,6 +90,10 @@
 		F10000000000000000000037 /* GeometricPencil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometricPencil.swift; sourceTree = "<group>"; };
 		F10000000000000000000038 /* ResponseSoundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseSoundPlayer.swift; sourceTree = "<group>"; };
 		F10000000000000000000039 /* AssistantMessageFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantMessageFormatter.swift; sourceTree = "<group>"; };
+		F10000000000000000000040 /* OpenWebUIRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWebUIRunner.swift; sourceTree = "<group>"; };
+		F10000000000000000000041 /* LocalChatSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalChatSessionStore.swift; sourceTree = "<group>"; };
+		F10000000000000000000043 /* OpenWebUIChatClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWebUIChatClient.swift; sourceTree = "<group>"; };
+		F10000000000000000000042 /* OpenWebUILauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWebUILauncher.swift; sourceTree = "<group>"; };
 		F10000000000000000000025 /* ClickOutsideDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickOutsideDismissal.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -174,6 +182,10 @@
 				F10000000000000000000035 /* AppRelauncher.swift */,
 				F10000000000000000000036 /* SystemPermissions.swift */,
 				F10000000000000000000038 /* ResponseSoundPlayer.swift */,
+				F10000000000000000000040 /* OpenWebUIRunner.swift */,
+				F10000000000000000000041 /* LocalChatSessionStore.swift */,
+				F10000000000000000000042 /* OpenWebUILauncher.swift */,
+				F10000000000000000000043 /* OpenWebUIChatClient.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -297,6 +309,10 @@
 				B10000000000000000000034 /* SystemPermissions.swift in Sources */,
 				B10000000000000000000037 /* AssistantMessageFormatter.swift in Sources */,
 				B10000000000000000000036 /* ResponseSoundPlayer.swift in Sources */,
+				B10000000000000000000038 /* OpenWebUIRunner.swift in Sources */,
+				B10000000000000000000039 /* LocalChatSessionStore.swift in Sources */,
+				B10000000000000000000040 /* OpenWebUILauncher.swift in Sources */,
+				B10000000000000000000041 /* OpenWebUIChatClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

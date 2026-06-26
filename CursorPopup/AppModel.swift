@@ -22,7 +22,7 @@ final class AppModel: ObservableObject {
     @Published var notionTaskTitle = ""
     @Published var notionSelectedCategory = NotionFieldSelection.none
     @Published var notionSelectedPriority = NotionFieldSelection.none
-    @Published var notionDueDate: Date? = Date()
+    @Published var notionDueDate: Date? = nil
     @Published var notionSchema: NotionDatabaseSchema?
     @Published var isLoadingNotionSchema = false
     @Published var notionSchemaError: String?
@@ -37,15 +37,17 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var pendingAttachments: [PendingAttachment] = []
     @Published private(set) var activeWorkspacePath: String = AppSettings.shared.defaultWorkspacePath
+    @Published private(set) var openWebUIProjects: [OpenWebUIProject] = []
 
     let settings = AppSettings.shared
     private let panelController = PanelController()
     private let chatPanelController = ChatPanelController()
     private let settingsPanelController = SettingsPanelController()
     private let notionTaskPanelController = NotionTaskPanelController()
-    private let chatBoxHotKey = GlobalHotKey(registrationID: 2)
     private let notionTaskHotKey = GlobalHotKey(registrationID: 3)
+    private let newChatHotKey = GlobalHotKey(registrationID: 4)
     private let agentRunner = AgentRunner()
+    private let openWebUIRunner = OpenWebUIRunner()
     private var sessionID: String?
     private var streamingAssistantID: UUID?
     private var agentRunGeneration = 0
@@ -71,11 +73,44 @@ final class AppModel: ObservableObject {
     }
 
     var canBrowseWorkspaces: Bool {
-        settings.workspaceFolders.count > 1
+        if usesOpenWebUIProjectNavigation {
+            return openWebUIProjectOptions.count > 1
+        }
+        return settings.workspaceFolders.count > 1
     }
 
     var workspaceLabel: String {
-        settings.displayName(for: activeWorkspacePath)
+        if usesOpenWebUIProjectNavigation {
+            return openWebUIProjectLabel
+        }
+        return settings.displayName(for: activeWorkspacePath)
+    }
+
+    var contextNavigationHint: String? {
+        guard isBrandNewChat else { return nil }
+        if usesOpenWebUIProjectNavigation, canBrowseWorkspaces {
+            return "←→ projects"
+        }
+        if !settings.usesOpenWebUI, settings.workspaceFolders.count > 1 {
+            return "←→ folders"
+        }
+        return nil
+    }
+
+    private var usesOpenWebUIProjectNavigation: Bool {
+        settings.usesOpenWebUI && isBrandNewChat && messages.isEmpty && !openWebUIProjects.isEmpty
+    }
+
+    private var openWebUIProjectOptions: [String?] {
+        [nil] + openWebUIProjects.map(\.id)
+    }
+
+    private var openWebUIProjectLabel: String {
+        guard let folderID = settings.openWebUIActiveFolderID,
+              let project = openWebUIProjects.first(where: { $0.id == folderID }) else {
+            return "No project"
+        }
+        return project.name
     }
 
     var notionTaskHasKeyboardFocus: Bool {
@@ -83,6 +118,10 @@ final class AppModel: ObservableObject {
     }
 
     func canNavigateWorkspace(_ direction: WorkspaceNavigationDirection) -> Bool {
+        if usesOpenWebUIProjectNavigation {
+            return canNavigateOpenWebUIProject(direction)
+        }
+
         let folders = settings.workspaceFolders
         guard folders.count > 1,
               let index = folders.firstIndex(of: activeWorkspacePath) else {
@@ -97,8 +136,40 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func canNavigateOpenWebUIProject(_ direction: WorkspaceNavigationDirection) -> Bool {
+        let options = openWebUIProjectOptions
+        guard options.count > 1,
+              let index = options.firstIndex(where: { $0 == settings.openWebUIActiveFolderID }) else {
+            return false
+        }
+
+        switch direction {
+        case .previous:
+            return index > 0
+        case .next:
+            return index < options.count - 1
+        }
+    }
+
     var hasChatConversation: Bool {
         !messages.isEmpty
+    }
+
+    /// Chat UI the user would see while a request is in flight.
+    var hasVisibleChatUI: Bool {
+        if usesFloatingChatBox {
+            return isChatBoxVisible
+        }
+        return isVisible
+    }
+
+    /// Agent is running but neither chat surface is visible (menu bar hint).
+    var showsBackgroundLoadingIndicator: Bool {
+        isLoading && !hasVisibleChatUI
+    }
+
+    var preventsAutoDismiss: Bool {
+        isLoading
     }
 
     func start() {
@@ -108,6 +179,8 @@ final class AppModel: ObservableObject {
         settingsPanelController.configure(model: self)
         notionTaskPanelController.configure(model: self)
         settings.bootstrapNotionConfiguration()
+        settings.removeExternalChatHotKeyIfNeeded()
+        settings.migrateToOpenWebUIIfNeeded()
         resetActiveWorkspaceToDefault()
         reloadHotKeys()
 
@@ -130,7 +203,30 @@ final class AppModel: ObservableObject {
 
     func preloadStartupData() {
         preloadWorkspaceSessions()
-        // Notion schema (and keychain token read) loads on first F6 / Settings use — not at launch.
+        refreshOpenWebUIProjects()
+    }
+
+    func refreshOpenWebUIProjects() {
+        guard settings.usesOpenWebUI else {
+            openWebUIProjects = []
+            return
+        }
+
+        Task.detached(priority: .utility) {
+            let projects = (try? await OpenWebUIChatClient.fetchProjects()) ?? []
+            await MainActor.run {
+                self.openWebUIProjects = projects
+                self.normalizeOpenWebUIProjectSelection()
+            }
+        }
+    }
+
+    private func normalizeOpenWebUIProjectSelection() {
+        guard let activeID = settings.openWebUIActiveFolderID else { return }
+        guard openWebUIProjects.contains(where: { $0.id == activeID }) else {
+            settings.openWebUIActiveFolderID = nil
+            return
+        }
     }
 
     func refreshWorkspaceSessionCache() {
@@ -140,11 +236,24 @@ final class AppModel: ObservableObject {
     private func preloadWorkspaceSessions() {
         let folders = settings.workspaceFolders
         let defaultPath = activeWorkspacePath
+        let usesOpenWebUI = settings.usesOpenWebUI
+        let syncOpenWebUI = settings.openWebUISyncChats
 
         Task.detached(priority: .utility) {
             var cache: [String: [SavedChatSession]] = [:]
-            for folder in folders {
-                cache[folder] = ChatSessionStore.loadSessions(for: folder)
+
+            if usesOpenWebUI && syncOpenWebUI {
+                let remoteSessions = (try? await OpenWebUIChatClient.loadSessions()) ?? []
+                for folder in folders {
+                    cache[folder] = remoteSessions
+                }
+                if folders.isEmpty {
+                    cache[defaultPath.isEmpty ? "default" : defaultPath] = remoteSessions
+                }
+            } else {
+                for folder in folders {
+                    cache[folder] = ChatSessionStore.loadSessions(for: folder)
+                }
             }
 
             await MainActor.run {
@@ -163,22 +272,23 @@ final class AppModel: ObservableObject {
 
     func stop() {
         ActiveScreenTracker.stop()
-        chatBoxHotKey.unregister()
         notionTaskHotKey.unregister()
+        newChatHotKey.unregister()
         removePasteMonitor()
         panelController.closePanel()
         chatPanelController.closePanel()
         settingsPanelController.closePanel()
         notionTaskPanelController.closePanel()
         agentRunner.cancel()
+        openWebUIRunner.cancel()
     }
 
     func reloadHotKeys() {
-        chatBoxHotKey.register(hotKeyID: settings.chatBoxHotKey) { [weak self] in
-            Task { @MainActor in self?.toggleChatBox() }
-        }
         notionTaskHotKey.register(hotKeyID: settings.notionTaskHotKey) { [weak self] in
             Task { @MainActor in self?.toggleNotionTask() }
+        }
+        newChatHotKey.register(hotKeyID: settings.newChatHotKey) { [weak self] in
+            Task { @MainActor in self?.triggerNewChatHotKey() }
         }
     }
 
@@ -192,6 +302,7 @@ final class AppModel: ObservableObject {
 
     func showPopup() {
         reloadSavedSessions()
+        refreshOpenWebUIProjects()
         if !isLoading {
             historyIndex = 0
             applyHistorySelection(clearChatBox: true)
@@ -214,15 +325,38 @@ final class AppModel: ObservableObject {
         if isChatBoxVisible {
             hideChatBox()
         } else {
-            showChatBox()
+            showChatBox(resetToNewChat: !isLoading)
         }
     }
 
-    func showChatBox() {
+    func showChatBox(resetToNewChat: Bool = false) {
         reloadSavedSessions()
+        if resetToNewChat {
+            startNewChat()
+        }
         chatPanelController.showPanel()
         isChatBoxVisible = true
         updatePasteMonitor()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func startNewChat() {
+        historyIndex = 0
+        applyHistorySelection(clearChatBox: false, clearPrompt: true)
+    }
+
+    func triggerNewChatHotKey() {
+        if settings.usesFloatingChatBox {
+            if isChatBoxVisible {
+                startNewChat()
+            } else {
+                showChatBox(resetToNewChat: !isLoading)
+            }
+        } else if isVisible {
+            startNewChat()
+        } else {
+            showPopup()
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -357,7 +491,7 @@ final class AppModel: ObservableObject {
         }
         notionSelectedCategory = NotionFieldSelection.none
         notionSelectedPriority = NotionFieldSelection.none
-        notionDueDate = Date()
+        notionDueDate = nil
         isNotionSubmitting = false
         notionStatusMessage = nil
         notionErrorMessage = nil
@@ -383,6 +517,9 @@ final class AppModel: ObservableObject {
 
     var canSubmitPrompt: Bool {
         let hasPrompt = !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        if settings.usesOpenWebUI {
+            return hasPrompt
+        }
         let hasWorkspace = !activeWorkspacePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return hasPrompt && hasWorkspace
     }
@@ -391,6 +528,22 @@ final class AppModel: ObservableObject {
         let path = activeWorkspacePath
 
         if forceReload || sessionsByWorkspace[path] == nil {
+            if settings.usesOpenWebUI && settings.openWebUISyncChats {
+                Task.detached(priority: .utility) {
+                    let loaded = (try? await OpenWebUIChatClient.loadSessions()) ?? []
+                    await MainActor.run {
+                        for folder in self.settings.workspaceFolders {
+                            self.sessionsByWorkspace[folder] = loaded
+                        }
+                        if self.settings.workspaceFolders.isEmpty {
+                            self.sessionsByWorkspace[path] = loaded
+                        }
+                        self.applyCachedSessions(for: path)
+                    }
+                }
+                return
+            }
+
             let loaded = ChatSessionStore.loadSessions(for: path)
             sessionsByWorkspace[path] = loaded
         }
@@ -424,6 +577,10 @@ final class AppModel: ObservableObject {
             return false
         }
 
+        if usesOpenWebUIProjectNavigation {
+            return navigateOpenWebUIProject(direction)
+        }
+
         let folders = settings.workspaceFolders
         guard folders.count > 1,
               let index = folders.firstIndex(of: activeWorkspacePath) else {
@@ -444,6 +601,34 @@ final class AppModel: ObservableObject {
         historyIndex = 0
         applyHistorySelection(clearChatBox: false)
         reloadSavedSessions()
+
+        if isVisible && !usesFloatingChatBox {
+            panelController.resizeToFitContent()
+        }
+        if isChatBoxVisible {
+            chatPanelController.resizeToFitContent()
+        }
+        return true
+    }
+
+    private func navigateOpenWebUIProject(_ direction: WorkspaceNavigationDirection) -> Bool {
+        let options = openWebUIProjectOptions
+        guard options.count > 1,
+              let index = options.firstIndex(where: { $0 == settings.openWebUIActiveFolderID }) else {
+            return false
+        }
+
+        let newIndex: Int
+        switch direction {
+        case .previous:
+            guard index > 0 else { return false }
+            newIndex = index - 1
+        case .next:
+            guard index < options.count - 1 else { return false }
+            newIndex = index + 1
+        }
+
+        settings.openWebUIActiveFolderID = options[newIndex]
 
         if isVisible && !usesFloatingChatBox {
             panelController.resizeToFitContent()
@@ -489,6 +674,7 @@ final class AppModel: ObservableObject {
         streamingAssistantID = nil
         agentRunGeneration += 1
         agentRunner.cancel()
+        openWebUIRunner.cancel()
 
         if clearChatBox {
             hideChatBox()
@@ -542,15 +728,31 @@ final class AppModel: ObservableObject {
 
         schedulePanelResize()
 
-        agentRunner.send(
-            prompt: outgoingPrompt,
-            workspace: activeWorkspacePath,
-            sessionID: sessionID,
-            imagePaths: imagePaths
-        ) { [weak self] event in
-            Task { @MainActor in
-                guard let self, self.agentRunGeneration == runGeneration else { return }
-                self.handleAgentEvent(event)
+        let conversationMessages = messages.filter { message in
+            !message.isStreaming && !(message.role == .assistant && message.text.isEmpty)
+        }
+
+        if settings.usesOpenWebUI {
+            openWebUIRunner.send(
+                messages: conversationMessages,
+                sessionID: sessionID
+            ) { [weak self] event in
+                Task { @MainActor in
+                    guard let self, self.agentRunGeneration == runGeneration else { return }
+                    self.handleAgentEvent(event)
+                }
+            }
+        } else {
+            agentRunner.send(
+                prompt: outgoingPrompt,
+                workspace: activeWorkspacePath,
+                sessionID: sessionID,
+                imagePaths: imagePaths
+            ) { [weak self] event in
+                Task { @MainActor in
+                    guard let self, self.agentRunGeneration == runGeneration else { return }
+                    self.handleAgentEvent(event)
+                }
             }
         }
     }
@@ -637,6 +839,13 @@ final class AppModel: ObservableObject {
         case .completed:
             finishStreamingAssistant()
             isLoading = false
+            if settings.usesOpenWebUI, let sessionID {
+                LocalChatSessionStore.saveSession(
+                    id: sessionID,
+                    messages: messages,
+                    workspacePath: activeWorkspacePath
+                )
+            }
             reloadSavedSessions(forceReload: true)
             playResponseCompletionSoundIfNeeded()
             if settings.usesFloatingChatBox, isChatBoxVisible {
@@ -707,11 +916,54 @@ final class AppModel: ObservableObject {
     }
 
     func openInCursorAgent() {
+        if settings.usesOpenWebUI {
+            let messagesToSync = messages.filter {
+                !$0.isStreaming && !($0.role == .assistant && $0.text.isEmpty)
+            }
+
+            if settings.openWebUISyncChats, let sessionID, !sessionID.isEmpty {
+                OpenWebUILauncher.openApp(chatID: sessionID)
+                return
+            }
+
+            guard !messagesToSync.isEmpty else {
+                OpenWebUILauncher.openApp()
+                return
+            }
+
+            Task {
+                do {
+                    let (_, _, model) = try OpenWebUIChatClient.credentials()
+                    let chatID = try await OpenWebUIChatClient.pushFullConversation(
+                        messages: messagesToSync,
+                        model: model
+                    )
+                    await MainActor.run {
+                        self.sessionID = chatID
+                        OpenWebUILauncher.openApp(chatID: chatID)
+                    }
+                } catch {
+                    await MainActor.run {
+                        OpenWebUILauncher.openApp(chatID: self.sessionID)
+                    }
+                }
+            }
+            return
+        }
         CursorLauncher.openInCursorAgent(
             workspace: activeWorkspacePath,
             messages: messages,
             sessionID: sessionID,
-            handoffMode: settings.cursorHandoffMode
+            handoffMode: settings.cursorHandoffMode,
+            handoffTarget: settings.cursorHandoffTarget
         )
+    }
+
+    var showsCursorHandoff: Bool {
+        !settings.usesOpenWebUI
+    }
+
+    var externalChatHandoffLabel: String {
+        settings.usesOpenWebUI ? "Open in Open WebUI" : "Open in Cursor agent"
     }
 }
