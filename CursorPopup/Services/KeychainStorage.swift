@@ -5,21 +5,6 @@ enum KeychainStorage {
     private static let notionTokenService = "com.cursorpopup.notion-token"
     private static let notionTokenAccount = "default"
     private static let notionTokenLabel = "Cursor Popup Notion Token"
-    private static let openWebUIAPIService = "com.cursorpopup.openwebui-api-key"
-    private static let openWebUIAPIAccount = "default"
-    private static let openWebUIAPILabel = "Cursor Popup Open WebUI API Key"
-
-    /// Open WebUI account API key (server auth). Stored only in Keychain — never UserDefaults or repo files.
-    static var openWebUIAPIKey: String? {
-        get { read(service: openWebUIAPIService, account: openWebUIAPIAccount) }
-        set {
-            if let newValue, !newValue.isEmpty {
-                save(newValue, service: openWebUIAPIService, account: openWebUIAPIAccount, label: openWebUIAPILabel)
-            } else {
-                delete(service: openWebUIAPIService, account: openWebUIAPIAccount)
-            }
-        }
-    }
 
     static var notionToken: String? {
         get { read(service: notionTokenService, account: notionTokenAccount) }

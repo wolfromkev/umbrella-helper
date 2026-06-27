@@ -69,8 +69,6 @@ struct NotionTaskContentView: View {
 
     private var inputCard: some View {
         PromptInputShell(
-            attachments: [],
-            onRemoveAttachment: { _ in },
             showsBackground: !showsFeedback,
             horizontalPadding: 14,
             verticalPadding: 10

@@ -10,11 +10,6 @@ struct HotKeyBinding: Codable, Equatable {
         modifiers: 0
     )
 
-    static let newChatDefault = HotKeyBinding(
-        keyCode: UInt32(kVK_ANSI_N),
-        modifiers: UInt32(cmdKey | shiftKey)
-    )
-
     static let snipAreaDefault = HotKeyBinding(
         keyCode: UInt32(kVK_ANSI_S),
         modifiers: UInt32(cmdKey | shiftKey)
@@ -192,15 +187,9 @@ final class AppSettings {
     static let shared = AppSettings()
 
     static let showMenuBarIconKey = "showMenuBarIcon"
-    static let playResponseSoundKey = Keys.playResponseSound
-    static let responseCompletionSoundKey = Keys.responseCompletionSound
 
     private enum Keys {
-        static let workspacePath = "workspacePath"
-        static let workspaceFolders = "workspaceFolders"
-        static let defaultWorkspacePath = "defaultWorkspacePath"
         static let notionTaskHotKey = "notionTaskHotKey"
-        static let newChatHotKey = "newChatHotKey"
         static let snipAreaHotKey = "snipAreaHotKey"
         static let snipWindowHotKey = "snipWindowHotKey"
         static let snipFullScreenHotKey = "snipFullScreenHotKey"
@@ -213,16 +202,6 @@ final class AppSettings {
         static let sunScreenPresetHotKeys = "sunScreenPresetHotKeys"
         static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
-        static let responseDisplayMode = "responseDisplayMode"
-        static let chatBackend = "chatBackend"
-        static let openWebUIBaseURL = "openWebUIBaseURL"
-        static let openWebUIModel = "openWebUIModel"
-        static let openWebUIActiveFolderID = "openWebUIActiveFolderID"
-        static let openWebUISyncChats = "openWebUISyncChats"
-        static let cursorHandoffMode = "cursorHandoffMode"
-        static let cursorHandoffTarget = "cursorHandoffTarget"
-        static let playResponseSound = "playResponseSound"
-        static let responseCompletionSound = "responseCompletionSound"
         static let showMenuBarIcon = showMenuBarIconKey
         static let permissionsAutomationDone = "permissionsAutomationDone"
         static let permissionsLoginItemsDone = "permissionsLoginItemsDone"
@@ -231,88 +210,11 @@ final class AppSettings {
     static let permissionsAutomationDoneKey = Keys.permissionsAutomationDone
     static let permissionsLoginItemsDoneKey = Keys.permissionsLoginItemsDone
 
-    static let defaultWorkspace = ""
     static let defaultNotionDatabaseID = ""
-    static let defaultOpenWebUIBaseURL = "http://localhost:8080"
-    static let defaultOpenWebUIModel = ""
     static let notionDefaultStatus = "Not started"
 
     func bootstrapNotionConfiguration() {
         KeychainStorage.seedBootstrapCredentialsIfNeeded()
-    }
-
-    var workspaceFolders: [String] {
-        get {
-            if let data = UserDefaults.standard.data(forKey: Keys.workspaceFolders),
-               let folders = try? JSONDecoder().decode([String].self, from: data),
-               !folders.isEmpty {
-                return folders
-            }
-
-            let legacy = UserDefaults.standard.string(forKey: Keys.workspacePath) ?? Self.defaultWorkspace
-            let trimmed = legacy.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? [] : [trimmed]
-        }
-        set {
-            let trimmed = newValue
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            if let data = try? JSONEncoder().encode(trimmed) {
-                UserDefaults.standard.set(data, forKey: Keys.workspaceFolders)
-            }
-            ensureDefaultWorkspaceIsValid()
-        }
-    }
-
-    var defaultWorkspacePath: String {
-        get {
-            if let path = UserDefaults.standard.string(forKey: Keys.defaultWorkspacePath),
-               workspaceFolders.contains(path) {
-                return path
-            }
-            return workspaceFolders.first ?? Self.defaultWorkspace
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.defaultWorkspacePath)
-        }
-    }
-
-    /// Legacy single-folder accessor; reads/writes the first folder in the list.
-    var workspacePath: String {
-        get { workspaceFolders.first ?? Self.defaultWorkspace }
-        set {
-            var folders = workspaceFolders
-            if folders.isEmpty {
-                folders = [newValue]
-            } else {
-                folders[0] = newValue
-            }
-            workspaceFolders = folders
-            if defaultWorkspacePath.isEmpty || !folders.contains(defaultWorkspacePath) {
-                defaultWorkspacePath = newValue
-            }
-        }
-    }
-
-    func ensureDefaultWorkspaceIsValid() {
-        let folders = workspaceFolders
-        guard !folders.isEmpty else { return }
-        if !folders.contains(defaultWorkspacePath) {
-            defaultWorkspacePath = folders[0]
-        }
-    }
-
-    func displayName(for path: String) -> String {
-        let name = URL(fileURLWithPath: path).lastPathComponent
-        return name.isEmpty ? path : name
-    }
-
-    /// Removes the legacy external chat hotkey (F3 / Cursor / Open WebUI launcher).
-    func removeExternalChatHotKeyIfNeeded() {
-        let migrationKey = "externalChatHotKeyRemoved_v2"
-        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
-        UserDefaults.standard.removeObject(forKey: "chatBoxHotKey")
-        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
     var notionTaskHotKey: HotKeyBinding {
@@ -328,23 +230,6 @@ final class AppSettings {
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Keys.notionTaskHotKey)
-            }
-        }
-    }
-
-    var newChatHotKey: HotKeyBinding {
-        get {
-            guard
-                let data = UserDefaults.standard.data(forKey: Keys.newChatHotKey),
-                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
-            else {
-                return .newChatDefault
-            }
-            return binding
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: Keys.newChatHotKey)
             }
         }
     }
@@ -531,159 +416,6 @@ final class AppSettings {
     var launchAtLogin: Bool {
         get { UserDefaults.standard.bool(forKey: Keys.launchAtLogin) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.launchAtLogin) }
-    }
-
-    var responseDisplayMode: ResponseDisplayMode {
-        get {
-            guard
-                let raw = UserDefaults.standard.string(forKey: Keys.responseDisplayMode),
-                let mode = ResponseDisplayMode(rawValue: raw)
-            else {
-                return .inline
-            }
-            return mode
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: Keys.responseDisplayMode)
-        }
-    }
-
-    var usesFloatingChatBox: Bool {
-        responseDisplayMode == .floatingChat
-    }
-
-    var chatBackend: ChatBackend {
-        get {
-            guard
-                let raw = UserDefaults.standard.string(forKey: Keys.chatBackend),
-                let backend = ChatBackend(rawValue: raw)
-            else {
-                return .openWebUI
-            }
-            return backend
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: Keys.chatBackend)
-        }
-    }
-
-    /// One-time migration: Open WebUI is the default chat backend.
-    func migrateToOpenWebUIIfNeeded() {
-        let migrationKey = "defaultedToOpenWebUI_v1"
-        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
-        chatBackend = .openWebUI
-        UserDefaults.standard.set(true, forKey: migrationKey)
-    }
-
-    var usesOpenWebUI: Bool {
-        chatBackend == .openWebUI
-    }
-
-    var openWebUIBaseURL: String {
-        get {
-            let stored = UserDefaults.standard.string(forKey: Keys.openWebUIBaseURL)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return stored?.isEmpty == false ? stored! : Self.defaultOpenWebUIBaseURL
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.openWebUIBaseURL)
-        }
-    }
-
-    var normalizedOpenWebUIBaseURL: String {
-        var url = openWebUIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        while url.hasSuffix("/") {
-            url.removeLast()
-        }
-        return url
-    }
-
-    var openWebUIModel: String {
-        get {
-            UserDefaults.standard.string(forKey: Keys.openWebUIModel) ?? Self.defaultOpenWebUIModel
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.openWebUIModel)
-        }
-    }
-
-    var openWebUIActiveFolderID: String? {
-        get {
-            let stored = UserDefaults.standard.string(forKey: Keys.openWebUIActiveFolderID)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return stored?.isEmpty == false ? stored : nil
-        }
-        set {
-            if let newValue, !newValue.isEmpty {
-                UserDefaults.standard.set(newValue, forKey: Keys.openWebUIActiveFolderID)
-            } else {
-                UserDefaults.standard.removeObject(forKey: Keys.openWebUIActiveFolderID)
-            }
-        }
-    }
-
-    var openWebUISyncChats: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: Keys.openWebUISyncChats) == nil {
-                return true
-            }
-            return UserDefaults.standard.bool(forKey: Keys.openWebUISyncChats)
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.openWebUISyncChats)
-        }
-    }
-
-    var cursorHandoffMode: CursorHandoffMode {
-        get {
-            guard
-                let raw = UserDefaults.standard.string(forKey: Keys.cursorHandoffMode),
-                let mode = CursorHandoffMode(rawValue: raw)
-            else {
-                return .formattedHistory
-            }
-            return mode
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: Keys.cursorHandoffMode)
-        }
-    }
-
-    var cursorHandoffTarget: CursorHandoffTarget {
-        get {
-            guard
-                let raw = UserDefaults.standard.string(forKey: Keys.cursorHandoffTarget),
-                let target = CursorHandoffTarget(rawValue: raw)
-            else {
-                return .agentsWindow
-            }
-            return target
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: Keys.cursorHandoffTarget)
-        }
-    }
-
-    var playResponseSound: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: Keys.playResponseSound) == nil {
-                return true
-            }
-            return UserDefaults.standard.bool(forKey: Keys.playResponseSound)
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.playResponseSound)
-        }
-    }
-
-    var responseCompletionSound: String {
-        get {
-            UserDefaults.standard.string(forKey: Keys.responseCompletionSound)
-                ?? CompletionSound.defaultSound.rawValue
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.responseCompletionSound)
-        }
     }
 
     var showMenuBarIcon: Bool {

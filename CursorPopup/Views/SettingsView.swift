@@ -10,7 +10,6 @@ private enum UmbrellaSettingsTab: Hashable {
 
 private enum KeybindingTarget: Hashable {
     case notionTask
-    case newChat
     case snipArea
     case snipWindow
     case snipFullScreen
@@ -27,10 +26,8 @@ struct SettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var selectedTab: UmbrellaSettingsTab = .keybindings
     @State private var launchAtLogin = AppSettings.shared.launchAtLogin
-    @State private var responseDisplayMode = AppSettings.shared.responseDisplayMode
 
     @State private var notionTaskHotKey = AppSettings.shared.notionTaskHotKey
-    @State private var newChatHotKey = AppSettings.shared.newChatHotKey
     @State private var snipAreaHotKey = AppSettings.shared.snipAreaHotKey
     @State private var snipWindowHotKey = AppSettings.shared.snipWindowHotKey
     @State private var snipFullScreenHotKey = AppSettings.shared.snipFullScreenHotKey
@@ -49,16 +46,6 @@ struct SettingsView: View {
     @State private var isEditingNotionCredentials = false
     @State private var notionTokenDraft = ""
     @State private var notionDatabaseIDDraft = ""
-
-    @State private var openWebUIBaseURL = AppSettings.shared.openWebUIBaseURL
-    @State private var openWebUIModel = AppSettings.shared.openWebUIModel
-    @State private var openWebUISyncChats = AppSettings.shared.openWebUISyncChats
-    @State private var savedOpenWebUIAPIKey = KeychainStorage.openWebUIAPIKey ?? ""
-    @State private var openWebUIAPIKeyDraft = ""
-    @State private var isEditingOpenWebUICredentials = false
-    @State private var availableOpenWebUIModels: [String] = []
-    @State private var isLoadingOpenWebUIModels = false
-    @State private var openWebUIStatusMessage: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -87,13 +74,8 @@ struct SettingsView: View {
         .padding(16)
         .onAppear {
             launchAtLogin = LaunchAtLoginManager.isEnabled
-            responseDisplayMode = AppSettings.shared.responseDisplayMode
             refreshPresetBindings()
             reloadNotionCredentials()
-            openWebUIBaseURL = AppSettings.shared.openWebUIBaseURL
-            openWebUIModel = AppSettings.shared.openWebUIModel
-            openWebUISyncChats = AppSettings.shared.openWebUISyncChats
-            savedOpenWebUIAPIKey = KeychainStorage.openWebUIAPIKey ?? ""
             detectShortcutConflict()
         }
     }
@@ -111,7 +93,6 @@ struct SettingsView: View {
 
                 sectionCard("Notion Pop-up") {
                     editableBindingRow("New Notion task", target: .notionTask)
-                    editableBindingRow("New chat", target: .newChat)
                 }
 
                 sectionCard("Neewer light control") {
@@ -152,76 +133,6 @@ struct SettingsView: View {
     private var notionPopupTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                sectionCard("Open WebUI") {
-                    row(label: "Server URL") {
-                        TextField("http://localhost:8080", text: $openWebUIBaseURL)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 320)
-                            .onChange(of: openWebUIBaseURL) { AppSettings.shared.openWebUIBaseURL = $0 }
-                    }
-
-                    row(label: "API key") {
-                        if isEditingOpenWebUICredentials {
-                            SecureField("sk-...", text: $openWebUIAPIKeyDraft)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 220)
-                        } else {
-                            Text(maskedOpenWebUIAPIKey(savedOpenWebUIAPIKey))
-                                .foregroundStyle(savedOpenWebUIAPIKey.isEmpty ? .orange : .secondary)
-                                .textSelection(.enabled)
-                                .frame(width: 220, alignment: .leading)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        if isEditingOpenWebUICredentials {
-                            Button("Save") { saveOpenWebUICredentials() }
-                                .disabled(openWebUIAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            Button("Cancel") { cancelEditingOpenWebUICredentials() }
-                        } else {
-                            Button("Edit API key…") { beginEditingOpenWebUICredentials() }
-                        }
-                    }
-
-                    row(label: "Model") {
-                        if availableOpenWebUIModels.isEmpty {
-                            TextField("llama3.2", text: $openWebUIModel)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 220)
-                                .onChange(of: openWebUIModel) { AppSettings.shared.openWebUIModel = $0 }
-                        } else {
-                            Picker("", selection: $openWebUIModel) {
-                                ForEach(availableOpenWebUIModels, id: \.self) { model in
-                                    Text(model).tag(model)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 220)
-                            .onChange(of: openWebUIModel) { AppSettings.shared.openWebUIModel = $0 }
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Button(isLoadingOpenWebUIModels ? "Loading…" : "Refresh models") {
-                            refreshOpenWebUIModels()
-                        }
-                        .disabled(isLoadingOpenWebUIModels)
-
-                        Toggle("Sync chats to Open WebUI", isOn: $openWebUISyncChats)
-                            .onChange(of: openWebUISyncChats) {
-                                AppSettings.shared.openWebUISyncChats = $0
-                                appModel.refreshWorkspaceSessionCache()
-                                appModel.refreshOpenWebUIProjects()
-                            }
-                    }
-
-                    if let openWebUIStatusMessage {
-                        Text(openWebUIStatusMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
                 sectionCard("Notion") {
                     row(label: "Integration token") {
                         if isEditingNotionCredentials {
@@ -264,17 +175,6 @@ struct SettingsView: View {
                 }
 
                 sectionCard("Behavior") {
-                    row(label: "Show replies in") {
-                        Picker("", selection: $responseDisplayMode) {
-                            ForEach(ResponseDisplayMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 220)
-                        .onChange(of: responseDisplayMode) { AppSettings.shared.responseDisplayMode = $0 }
-                    }
-
                     row(label: "Launch at login") {
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
@@ -328,7 +228,6 @@ struct SettingsView: View {
             get: {
                 switch target {
                 case .notionTask: return notionTaskHotKey
-                case .newChat: return newChatHotKey
                 case .snipArea: return snipAreaHotKey
                 case .snipWindow: return snipWindowHotKey
                 case .snipFullScreen: return snipFullScreenHotKey
@@ -353,9 +252,6 @@ struct SettingsView: View {
         case .notionTask:
             notionTaskHotKey = binding
             AppSettings.shared.notionTaskHotKey = binding
-        case .newChat:
-            newChatHotKey = binding
-            AppSettings.shared.newChatHotKey = binding
         case .snipArea:
             snipAreaHotKey = binding
             AppSettings.shared.snipAreaHotKey = binding
@@ -397,9 +293,6 @@ struct SettingsView: View {
         case .notionTask:
             notionTaskHotKey = .notionTaskDefault
             AppSettings.shared.notionTaskHotKey = .notionTaskDefault
-        case .newChat:
-            newChatHotKey = .newChatDefault
-            AppSettings.shared.newChatHotKey = .newChatDefault
         case .snipArea:
             snipAreaHotKey = .snipAreaDefault
             AppSettings.shared.snipAreaHotKey = .snipAreaDefault
@@ -447,7 +340,6 @@ struct SettingsView: View {
     private func detectShortcutConflict() {
         let all: [(String, HotKeyBinding)] = [
             ("Notion task", notionTaskHotKey),
-            ("New chat", newChatHotKey),
             ("Snip area", snipAreaHotKey),
             ("Snip window", snipWindowHotKey),
             ("Snip full screen", snipFullScreenHotKey),
@@ -520,73 +412,6 @@ struct SettingsView: View {
         AppSettings.shared.notionDatabaseID = databaseID
         isEditingNotionCredentials = false
         reloadNotionCredentials()
-    }
-
-    private func maskedOpenWebUIAPIKey(_ key: String) -> String {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "Not set" }
-        guard trimmed.count > 8 else { return String(repeating: "•", count: trimmed.count) }
-        let suffix = trimmed.suffix(4)
-        return "\(String(repeating: "•", count: max(4, trimmed.count - 4)))\(suffix)"
-    }
-
-    private func beginEditingOpenWebUICredentials() {
-        openWebUIAPIKeyDraft = savedOpenWebUIAPIKey
-        isEditingOpenWebUICredentials = true
-    }
-
-    private func cancelEditingOpenWebUICredentials() {
-        openWebUIAPIKeyDraft = savedOpenWebUIAPIKey
-        isEditingOpenWebUICredentials = false
-    }
-
-    private func saveOpenWebUICredentials() {
-        let key = openWebUIAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        KeychainStorage.openWebUIAPIKey = key
-        savedOpenWebUIAPIKey = key
-        isEditingOpenWebUICredentials = false
-    }
-
-    private func refreshOpenWebUIModels() {
-        openWebUIStatusMessage = nil
-        let baseURL = openWebUIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let apiKey = (isEditingOpenWebUICredentials ? openWebUIAPIKeyDraft : savedOpenWebUIAPIKey)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !baseURL.isEmpty else {
-            openWebUIStatusMessage = "Enter a server URL first."
-            return
-        }
-        guard !apiKey.isEmpty else {
-            openWebUIStatusMessage = "Set an Open WebUI API key first."
-            return
-        }
-
-        isLoadingOpenWebUIModels = true
-        Task {
-            do {
-                let models = try await OpenWebUIRunner.fetchModels(baseURL: baseURL, apiKey: apiKey)
-                await MainActor.run {
-                    availableOpenWebUIModels = models
-                    if openWebUIModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                       let first = models.first {
-                        openWebUIModel = first
-                        AppSettings.shared.openWebUIModel = first
-                    }
-                    openWebUIStatusMessage = models.isEmpty
-                        ? "No models returned. Check your Open WebUI permissions."
-                        : "Loaded \(models.count) model\(models.count == 1 ? "" : "s")."
-                    isLoadingOpenWebUIModels = false
-                }
-            } catch {
-                await MainActor.run {
-                    availableOpenWebUIModels = []
-                    openWebUIStatusMessage = error.localizedDescription
-                    isLoadingOpenWebUIModels = false
-                }
-            }
-        }
     }
 
     @ViewBuilder
