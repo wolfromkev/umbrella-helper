@@ -944,9 +944,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     func takeAreaSnip() {
-        _ = ensureScreenCaptureAccess()
-        let output = screenshotOutputPath()
-        runScreencapture(arguments: ["-i", "-s", "-x", output], outputPath: output, reveal: revealScreenshotInFinder)
+        presentAreaSelector()
     }
 
     func takeWindowSnip() {
@@ -962,16 +960,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     func copyTextFromAreaSnip() {
-        _ = ensureScreenCaptureAccess()
-        let output = textCaptureOutputPath()
-        runTextCapture(arguments: ["-i", "-s", "-x", output], outputPath: output)
-    }
-
-    private enum MicrophoneCaptureMode {
-        case disabled
-        case enabled
-        case pending
-        case denied
+        presentAreaSelector(preferTextCopy: true)
     }
 
     func toggleRecording() {
@@ -988,7 +977,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
         logDebug("record: presenting area selector")
         let selector = UmbrellaAreaSelectionOverlay(
-            onComplete: { [weak self] selection in
+            onComplete: { [weak self] selection, _ in
                 self?.areaSelector = nil
                 self?.beginRecording(selection: selection)
             },
@@ -1006,18 +995,27 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         recordingStartGeneration += 1
         let generation = recordingStartGeneration
         isStartingRecording = true
-
-        let micMode: MicrophoneCaptureMode = recordMicrophone ? ensureMicrophoneAccess() : .disabled
-        let config = UmbrellaRecordingConfig(
-            folder: URL(fileURLWithPath: recordingFolderPath),
-            recordSystemAudio: recordSystemAudio,
-            recordMicrophone: recordMicrophone && micMode == .enabled
-        )
-        logDebug("record begin: sysAudio=\(config.recordSystemAudio) mic=\(config.recordMicrophone) [\(micMode)]")
+        logDebug("record begin: requesting permissions")
 
         startRecordingTask?.cancel()
         startRecordingTask = Task { @MainActor in
             defer { self.startRecordingTask = nil }
+
+            var includeMic = false
+            if recordMicrophone {
+                includeMic = await ensureMicrophoneAccessAsync()
+                if !includeMic {
+                    logDebug("record begin: microphone unavailable, continuing without mic")
+                }
+            }
+
+            let config = UmbrellaRecordingConfig(
+                folder: URL(fileURLWithPath: recordingFolderPath),
+                recordSystemAudio: recordSystemAudio,
+                recordMicrophone: includeMic
+            )
+            logDebug("record begin: sysAudio=\(config.recordSystemAudio) mic=\(config.recordMicrophone)")
+
             do {
                 let outputURL = try await screenRecorder.startRecording(selection: selection, config: config)
                 guard generation == recordingStartGeneration else {
@@ -1103,6 +1101,117 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         recordingOverlay = nil
         Task { await screenRecorder.cancelRecording() }
         logDebug("record: cancelled by user")
+    }
+
+    private func presentAreaSelector(preferTextCopy: Bool = false) {
+        guard areaSelector == nil, !isStartingRecording, !isRecording else { return }
+        _ = ensureScreenCaptureAccess()
+        NSApp.activate(ignoringOtherApps: true)
+        logDebug("snip: presenting area selector\(preferTextCopy ? " (text copy)" : "")")
+        let selector = UmbrellaAreaSelectionOverlay(
+            allowsTextCopy: true,
+            initialTextCopy: preferTextCopy,
+            onComplete: { [weak self] selection, copyText in
+                guard let self else { return }
+                self.areaSelector = nil
+                self.logDebug("snip: selection complete copyText=\(copyText)")
+                if copyText {
+                    self.finishTextSnip(selection: selection)
+                } else {
+                    self.finishImageSnip(selection: selection)
+                }
+            },
+            onCancel: { [weak self] in
+                self?.areaSelector = nil
+                self?.logDebug("snip: selection cancelled")
+            }
+        )
+        areaSelector = selector
+        selector.present()
+    }
+
+    private func finishImageSnip(selection: CGRect) {
+        let output = screenshotOutputPath()
+        captureSelectionRegion(selection, outputPath: output) { [weak self] success in
+            guard let self else { return }
+            if success {
+                self.screenCaptureState = .allowed
+                self.lastSavedPath = output
+                self.defaults.set(output, forKey: "umbrella.snip.lastSavedPath")
+                let copied = self.copyImageToClipboard(from: output)
+                self.logDebug("snip clipboard copy: \(copied ? "ok" : "FAILED")")
+                self.postNotification(
+                    title: "Umbrella Helper",
+                    body: "Saved \((output as NSString).lastPathComponent) and copied to clipboard"
+                )
+                if self.revealScreenshotInFinder {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: output)])
+                }
+            } else if !CGPreflightScreenCaptureAccess() {
+                self.screenCaptureState = .notAllowed
+                self.postNotification(
+                    title: "Umbrella Helper",
+                    body: "Screen capture access is required. Enable Umbrella Helper in Screen & System Audio Recording."
+                )
+            } else {
+                self.postNotification(title: "Umbrella Helper", body: "Capture failed.")
+            }
+        }
+    }
+
+    private func finishTextSnip(selection: CGRect) {
+        let output = textCaptureOutputPath()
+        captureSelectionRegion(selection, outputPath: output) { [weak self] success in
+            guard let self else { return }
+            if success {
+                self.screenCaptureState = .allowed
+                self.extractTextToClipboard(from: output)
+            } else if !CGPreflightScreenCaptureAccess() {
+                self.screenCaptureState = .notAllowed
+                self.postNotification(
+                    title: "Umbrella Helper",
+                    body: "Screen capture access is required. Enable Umbrella Helper in Screen & System Audio Recording."
+                )
+            } else {
+                self.postNotification(title: "Umbrella Helper", body: "Text capture failed.")
+            }
+        }
+    }
+
+    private func captureSelectionRegion(_ selection: CGRect, outputPath: String, completion: @escaping (Bool) -> Void) {
+        ensureDirectory(screenshotFolderPath)
+        let args = Self.screencaptureRegionArguments(for: selection, outputPath: outputPath)
+        logDebug("snip run: screencapture \(args.joined(separator: " "))")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = args
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        process.terminationHandler = { [weak self] task in
+            let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let fileExists = FileManager.default.fileExists(atPath: outputPath)
+            Task { @MainActor in
+                guard let self else { return }
+                self.logDebug("snip exit=\(task.terminationStatus) file=\(fileExists ? "yes" : "no")\(stderr.isEmpty ? "" : " stderr=\(stderr)")")
+                completion(task.terminationStatus == 0 && fileExists)
+            }
+        }
+        do {
+            try process.run()
+        } catch {
+            logDebug("snip launch error: \(error.localizedDescription)")
+            completion(false)
+        }
+    }
+
+    private static func screencaptureRegionArguments(for selection: CGRect, outputPath: String) -> [String] {
+        let globalTop = NSScreen.screens.map(\.frame.maxY).max() ?? 0
+        let x = Int(selection.minX.rounded())
+        let y = Int((globalTop - selection.maxY).rounded())
+        let w = max(1, Int(selection.width.rounded()))
+        let h = max(1, Int(selection.height.rounded()))
+        return ["-R", "\(x),\(y),\(w),\(h)", "-x", outputPath]
     }
 
     private func runScreencapture(arguments: [String], outputPath: String, reveal: Bool) {
@@ -1296,7 +1405,9 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     func openMicrophoneSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -1305,24 +1416,48 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     /// Settings window. This reliably shows the TCC prompt (and registers the
     /// app in System Settings → Microphone) far better than requesting mid-capture.
     func requestMicrophonePermission() {
+        Task { @MainActor in
+            _ = await ensureMicrophoneAccessAsync()
+        }
+    }
+
+    @discardableResult
+    private func ensureMicrophoneAccessAsync() async -> Bool {
+        refreshPermissionState()
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        logDebug("mic request tapped, status=\(Self.statusName(status))")
+        logDebug("mic status=\(Self.statusName(status))")
         switch status {
         case .authorized:
             microphoneState = .allowed
+            return true
         case .notDetermined:
+            microphoneState = .notRequested
             NSApp.activate(ignoringOtherApps: true)
-            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.microphoneState = granted ? .allowed : .notAllowed
-                    self.logDebug("mic request resolved: \(granted ? "granted" : "denied")")
+            let granted = await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    continuation.resume(returning: granted)
                 }
             }
+            microphoneState = granted ? .allowed : .notAllowed
+            logDebug("mic request resolved: \(granted ? "granted" : "denied")")
+            if !granted {
+                postNotification(
+                    title: "Umbrella Helper",
+                    body: "Microphone access is required to record audio."
+                )
+            }
+            return granted
         case .denied, .restricted:
+            microphoneState = .notAllowed
+            postNotification(
+                title: "Umbrella Helper",
+                body: "Enable Umbrella Helper in System Settings → Privacy & Security → Microphone."
+            )
             openMicrophoneSettings()
+            return false
         @unknown default:
-            openMicrophoneSettings()
+            microphoneState = .notAllowed
+            return false
         }
     }
 
@@ -1365,39 +1500,6 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: Date())
-    }
-
-    private func ensureMicrophoneAccess() -> MicrophoneCaptureMode {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        logDebug("mic status=\(Self.statusName(status))")
-        switch status {
-        case .authorized:
-            microphoneState = .allowed
-            return .enabled
-        case .notDetermined:
-            // Trigger exactly one AVFoundation prompt and DO NOT pass -g this run,
-            // so screencapture won't fire a second, competing prompt.
-            microphoneState = .notRequested
-            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.microphoneState = granted ? .allowed : .notAllowed
-                    self.logDebug("mic request resolved: \(granted ? "granted" : "denied")")
-                }
-            }
-            postNotification(
-                title: "Umbrella Helper",
-                body: "Approve microphone access, then record again to include mic audio."
-            )
-            return .pending
-        case .denied, .restricted:
-            microphoneState = .notAllowed
-            postNotification(title: "Umbrella Helper", body: "Microphone access is disabled. Recording without mic audio.")
-            return .denied
-        @unknown default:
-            microphoneState = .notAllowed
-            return .denied
-        }
     }
 
     private static func statusName(_ status: AVAuthorizationStatus) -> String {
@@ -1784,18 +1886,35 @@ final class UmbrellaAreaSelectionOverlay {
     private var currentSelection: NSRect = .zero
     private var keyEventMonitor: Any?
     private var globalKeyEventMonitor: Any?
+    private var textCopyKeyMonitor: Any?
     private var isFinishing = false
+    private var textCopyModeActive = false
+    private var textCopyRequested = false
     private var screenParametersObserver: NSObjectProtocol?
-    private let onComplete: (CGRect) -> Void
+    private let allowsTextCopy: Bool
+    private let initialTextCopy: Bool
+    private let textCopyKeyCode: UInt16
+    private let onComplete: (CGRect, Bool) -> Void
     private let onCancel: () -> Void
 
-    init(onComplete: @escaping (CGRect) -> Void, onCancel: @escaping () -> Void) {
+    init(
+        allowsTextCopy: Bool = false,
+        initialTextCopy: Bool = false,
+        textCopyKeyCode: UInt16 = UInt16(kVK_Tab),
+        onComplete: @escaping (CGRect, Bool) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.allowsTextCopy = allowsTextCopy
+        self.initialTextCopy = initialTextCopy
+        self.textCopyKeyCode = textCopyKeyCode
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
 
     func present() {
         isFinishing = false
+        textCopyModeActive = allowsTextCopy && initialTextCopy
+        textCopyRequested = textCopyModeActive
         NSCursor.crosshair.push()
         rebuildOverlayWindows()
 
@@ -1818,6 +1937,31 @@ final class UmbrellaAreaSelectionOverlay {
             guard event.keyCode == 53 else { return }
             self?.finish(cancelled: true)
         }
+
+        if allowsTextCopy {
+            textCopyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+                guard let self, event.keyCode == self.textCopyKeyCode else { return event }
+                if event.type == .keyDown {
+                    self.textCopyRequested = true
+                    self.setTextCopyModeActive(true)
+                } else {
+                    self.setTextCopyModeActive(false)
+                }
+                return nil
+            }
+        }
+    }
+
+    private func setTextCopyModeActive(_ active: Bool) {
+        guard allowsTextCopy, textCopyModeActive != active else { return }
+        textCopyModeActive = active
+        refreshOverlays()
+    }
+
+    private func engageTextCopyMode() {
+        guard allowsTextCopy else { return }
+        textCopyRequested = true
+        setTextCopyModeActive(true)
     }
 
     private func rebuildOverlayWindows() {
@@ -1828,6 +1972,7 @@ final class UmbrellaAreaSelectionOverlay {
         for screen in NSScreen.screens {
             let window = OverlayWindow(screen: screen, selector: self)
             window.selectionRect = currentSelection
+            window.showsTextCopyIndicator = allowsTextCopy && textCopyModeActive
             overlayWindows.append(window)
             window.orderFrontRegardless()
         }
@@ -1843,6 +1988,8 @@ final class UmbrellaAreaSelectionOverlay {
     fileprivate func beginSelection(at point: NSPoint, in view: OverlayView) {
         startPoint = point
         currentSelection = NSRect(origin: point, size: .zero)
+        textCopyRequested = allowsTextCopy && initialTextCopy
+        textCopyModeActive = textCopyRequested
         refreshOverlays()
 
         view.window?.trackEvents(
@@ -1860,6 +2007,10 @@ final class UmbrellaAreaSelectionOverlay {
             case .keyDown where event.keyCode == 53:
                 self.finish(cancelled: true)
                 stop.pointee = true
+            case .keyDown where self.allowsTextCopy && event.keyCode == self.textCopyKeyCode:
+                self.engageTextCopyMode()
+            case .keyUp where self.allowsTextCopy && event.keyCode == self.textCopyKeyCode:
+                self.setTextCopyModeActive(false)
             default:
                 break
             }
@@ -1892,6 +2043,7 @@ final class UmbrellaAreaSelectionOverlay {
     private func refreshOverlays() {
         for window in overlayWindows {
             window.selectionRect = currentSelection
+            window.showsTextCopyIndicator = allowsTextCopy && textCopyModeActive
             window.contentView?.needsDisplay = true
         }
     }
@@ -1902,6 +2054,7 @@ final class UmbrellaAreaSelectionOverlay {
 
         if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor); self.keyEventMonitor = nil }
         if let globalKeyEventMonitor { NSEvent.removeMonitor(globalKeyEventMonitor); self.globalKeyEventMonitor = nil }
+        if let textCopyKeyMonitor { NSEvent.removeMonitor(textCopyKeyMonitor); self.textCopyKeyMonitor = nil }
         if let screenParametersObserver {
             NotificationCenter.default.removeObserver(screenParametersObserver)
             self.screenParametersObserver = nil
@@ -1909,6 +2062,9 @@ final class UmbrellaAreaSelectionOverlay {
         NSCursor.pop()
         startPoint = nil
         currentSelection = .zero
+        let copyText = !cancelled && allowsTextCopy && textCopyRequested
+        textCopyModeActive = false
+        textCopyRequested = false
         overlayWindows.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll()
 
@@ -1918,7 +2074,7 @@ final class UmbrellaAreaSelectionOverlay {
             if cancelled {
                 cancellation()
             } else {
-                completion(selection)
+                completion(selection, copyText)
             }
         }
     }
@@ -1934,6 +2090,7 @@ final class UmbrellaAreaSelectionOverlay {
 
     fileprivate final class OverlayWindow: NSWindow {
         var selectionRect: NSRect = .zero
+        var showsTextCopyIndicator = false
         private weak var selector: UmbrellaAreaSelectionOverlay?
 
         init(screen: NSScreen, selector: UmbrellaAreaSelectionOverlay) {
@@ -2000,9 +2157,52 @@ final class UmbrellaAreaSelectionOverlay {
             let path = NSBezierPath(rect: visible)
             path.lineWidth = 2.5
             effectiveAppearance.performAsCurrentDrawingAppearance {
-                NSColor.systemCyan.setStroke()
+                if window.showsTextCopyIndicator {
+                    NSColor.systemGreen.setStroke()
+                } else {
+                    NSColor.systemCyan.setStroke()
+                }
                 path.stroke()
             }
+
+            if window.showsTextCopyIndicator {
+                drawTextCopyIndicator(near: visible)
+            }
+        }
+
+        private func drawTextCopyIndicator(near selection: NSRect) {
+            let label = "Text copy"
+            let font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.white,
+            ]
+            let textSize = (label as NSString).size(withAttributes: attributes)
+            let horizontalPadding: CGFloat = 10
+            let verticalPadding: CGFloat = 5
+            let pillSize = NSSize(
+                width: textSize.width + horizontalPadding * 2,
+                height: textSize.height + verticalPadding * 2
+            )
+            var pillOrigin = NSPoint(
+                x: selection.maxX + 8,
+                y: selection.minY - pillSize.height - 8
+            )
+            pillOrigin.x = min(pillOrigin.x, bounds.maxX - pillSize.width - 4)
+            pillOrigin.y = max(pillOrigin.y, bounds.minY + 4)
+
+            let pillRect = NSRect(origin: pillOrigin, size: pillSize)
+            let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 6, yRadius: 6)
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                NSColor.systemGreen.setFill()
+                pillPath.fill()
+            }
+
+            let textOrigin = NSPoint(
+                x: pillRect.midX - textSize.width / 2,
+                y: pillRect.midY - textSize.height / 2
+            )
+            (label as NSString).draw(at: textOrigin, withAttributes: attributes)
         }
     }
 }
@@ -2345,6 +2545,12 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
             streamConfig.channelCount = 2
             streamConfig.excludesCurrentProcessAudio = false
         }
+        if recordMicrophone {
+            if #available(macOS 15.0, *) {
+                streamConfig.captureMicrophone = true
+                streamConfig.microphoneCaptureDeviceID = AVCaptureDevice.default(for: .audio)?.uniqueID
+            }
+        }
         streamConfig.pixelFormat = kCVPixelFormatType_32BGRA
         streamConfig.colorSpaceName = CGColorSpace.sRGB
 
@@ -2386,13 +2592,21 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
             micInput.expectsMediaDataInRealTime = true
             guard writer.canAdd(micInput) else { throw UmbrellaRecorderError.writerSetupFailed }
             writer.add(micInput)
-            micCapture = try MicrophoneCapture(audioInput: micInput, audioLevelMeter: audioLevelMeter)
             micAudioInput = micInput
+            if #unavailable(macOS 15.0) {
+                micCapture = try MicrophoneCapture(audioInput: micInput, audioLevelMeter: audioLevelMeter)
+            }
         }
 
         guard writer.startWriting() else { throw writer.error ?? UmbrellaRecorderError.writerSetupFailed }
 
-        let output = StreamOutput(videoInput: input, systemAudioInput: systemInput, audioLevelMeter: audioLevelMeter, parent: self)
+        let output = StreamOutput(
+            videoInput: input,
+            systemAudioInput: systemInput,
+            micAudioInput: micAudioInput,
+            audioLevelMeter: audioLevelMeter,
+            parent: self
+        )
         streamOutput = output
         assetWriter = writer
         videoInput = input
@@ -2404,6 +2618,11 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
         try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: sampleQueue)
         if recordSystemAudio {
             try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: sampleQueue)
+        }
+        if recordMicrophone {
+            if #available(macOS 15.0, *) {
+                try stream.addStreamOutput(output, type: .microphone, sampleHandlerQueue: sampleQueue)
+            }
         }
         self.stream = stream
         try await stream.startCapture()
@@ -2519,16 +2738,25 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
     private final class StreamOutput: NSObject, SCStreamOutput {
         let videoInput: AVAssetWriterInput
         let systemAudioInput: AVAssetWriterInput?
+        let micAudioInput: AVAssetWriterInput?
         private let audioLevelMeter: UmbrellaAudioLevelMeter
         private unowned let parent: UmbrellaScreenRecorder
         var sessionStarted = false
         var firstVideoSampleTime: CMTime = .zero
         var firstSystemAudioSampleTime: CMTime = .zero
+        var firstMicSampleTime: CMTime = .zero
         var lastVideoSampleBuffer: CMSampleBuffer?
 
-        init(videoInput: AVAssetWriterInput, systemAudioInput: AVAssetWriterInput?, audioLevelMeter: UmbrellaAudioLevelMeter, parent: UmbrellaScreenRecorder) {
+        init(
+            videoInput: AVAssetWriterInput,
+            systemAudioInput: AVAssetWriterInput?,
+            micAudioInput: AVAssetWriterInput?,
+            audioLevelMeter: UmbrellaAudioLevelMeter,
+            parent: UmbrellaScreenRecorder
+        ) {
             self.videoInput = videoInput
             self.systemAudioInput = systemAudioInput
+            self.micAudioInput = micAudioInput
             self.audioLevelMeter = audioLevelMeter
             self.parent = parent
         }
@@ -2536,9 +2764,14 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
         func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
             guard sessionStarted, sampleBuffer.isValid else { return }
             switch outputType {
-            case .screen: appendVideoSample(sampleBuffer)
-            case .audio: appendSystemAudioSample(sampleBuffer)
-            default: break
+            case .screen:
+                appendVideoSample(sampleBuffer)
+            case .audio:
+                appendSystemAudioSample(sampleBuffer)
+            case .microphone:
+                appendMicSample(sampleBuffer)
+            @unknown default:
+                break
             }
         }
 
@@ -2567,6 +2800,16 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
             audioLevelMeter.ingestSystemAudio(sampleBuffer)
             systemAudioInput.append(retimed)
         }
+
+        private func appendMicSample(_ sampleBuffer: CMSampleBuffer) {
+            guard let micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
+            if firstMicSampleTime == .zero { firstMicSampleTime = sampleBuffer.presentationTimeStamp }
+            let presentationTime = sampleBuffer.presentationTimeStamp - firstMicSampleTime
+            let timing = CMSampleTimingInfo(duration: sampleBuffer.duration, presentationTimeStamp: presentationTime, decodeTimeStamp: sampleBuffer.decodeTimeStamp)
+            guard let retimed = try? CMSampleBuffer(copying: sampleBuffer, withNewTiming: [timing]) else { return }
+            audioLevelMeter.ingestMicrophone(sampleBuffer)
+            micAudioInput.append(retimed)
+        }
     }
 
     private final class MicrophoneCapture: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
@@ -2582,6 +2825,9 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
             self.audioInput = audioInput
             self.audioLevelMeter = audioLevelMeter
             super.init()
+            guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+                throw UmbrellaRecorderError.microphonePermissionDenied
+            }
             captureSession.beginConfiguration()
             guard let device = AVCaptureDevice.default(for: .audio) else { throw UmbrellaRecorderError.noMicrophone }
             let deviceInput = try AVCaptureDeviceInput(device: device)
