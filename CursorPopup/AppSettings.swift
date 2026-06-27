@@ -15,6 +15,51 @@ struct HotKeyBinding: Codable, Equatable {
         modifiers: UInt32(cmdKey | shiftKey)
     )
 
+    static let snipAreaDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_ANSI_S),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
+    static let snipWindowDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_ANSI_W),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
+    static let snipFullScreenDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_ANSI_A),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
+    static let recordAreaDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_ANSI_R),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
+    static let snipTextDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_ANSI_T),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
+    static let brightnessDownDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_F1),
+        modifiers: 0
+    )
+
+    static let brightnessUpDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_F2),
+        modifiers: 0
+    )
+
+    static let warmthUpDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_F1),
+        modifiers: UInt32(shiftKey)
+    )
+
+    static let warmthDownDefault = HotKeyBinding(
+        keyCode: UInt32(kVK_F2),
+        modifiers: UInt32(shiftKey)
+    )
+
     var displayName: String {
         var parts: [String] = []
         if modifiers & UInt32(controlKey) != 0 { parts.append("⌃") }
@@ -156,6 +201,16 @@ final class AppSettings {
         static let defaultWorkspacePath = "defaultWorkspacePath"
         static let notionTaskHotKey = "notionTaskHotKey"
         static let newChatHotKey = "newChatHotKey"
+        static let snipAreaHotKey = "snipAreaHotKey"
+        static let snipWindowHotKey = "snipWindowHotKey"
+        static let snipFullScreenHotKey = "snipFullScreenHotKey"
+        static let snipRecordHotKey = "snipRecordHotKey"
+        static let snipTextHotKey = "snipTextHotKey"
+        static let brightnessDownHotKey = "brightnessDownHotKey"
+        static let brightnessUpHotKey = "brightnessUpHotKey"
+        static let warmthUpHotKey = "warmthUpHotKey"
+        static let warmthDownHotKey = "warmthDownHotKey"
+        static let sunScreenPresetHotKeys = "sunScreenPresetHotKeys"
         static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
         static let responseDisplayMode = "responseDisplayMode"
@@ -290,6 +345,176 @@ final class AppSettings {
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Keys.newChatHotKey)
+            }
+        }
+    }
+
+    var snipAreaHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.snipAreaHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .snipAreaDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.snipAreaHotKey)
+            }
+        }
+    }
+
+    var snipWindowHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.snipWindowHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .snipWindowDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.snipWindowHotKey)
+            }
+        }
+    }
+
+    var snipFullScreenHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.snipFullScreenHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .snipFullScreenDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.snipFullScreenHotKey)
+            }
+        }
+    }
+
+    var snipRecordHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.snipRecordHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .recordAreaDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.snipRecordHotKey)
+            }
+        }
+    }
+
+    var snipTextHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.snipTextHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .snipTextDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.snipTextHotKey)
+            }
+        }
+    }
+
+    var brightnessDownHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.brightnessDownHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .brightnessDownDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.brightnessDownHotKey)
+            }
+        }
+    }
+
+    var brightnessUpHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.brightnessUpHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .brightnessUpDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.brightnessUpHotKey)
+            }
+        }
+    }
+
+    var warmthUpHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.warmthUpHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .warmthUpDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.warmthUpHotKey)
+            }
+        }
+    }
+
+    var warmthDownHotKey: HotKeyBinding {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.warmthDownHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return .warmthDownDefault
+            }
+            return binding
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.warmthDownHotKey)
+            }
+        }
+    }
+
+    var sunScreenPresetHotKeys: [String: HotKeyBinding] {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.sunScreenPresetHotKeys),
+                let bindings = try? JSONDecoder().decode([String: HotKeyBinding].self, from: data)
+            else {
+                return [:]
+            }
+            return bindings
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.sunScreenPresetHotKeys)
             }
         }
     }

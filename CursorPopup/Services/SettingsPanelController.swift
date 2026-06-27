@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 enum SettingsPanelMetrics {
-    static let defaultWidth: CGFloat = 520
-    static let defaultHeight: CGFloat = 580
-    static let minWidth: CGFloat = 420
-    static let minHeight: CGFloat = 400
+    static let defaultWidth: CGFloat = 860
+    static let defaultHeight: CGFloat = 640
+    static let minWidth: CGFloat = 720
+    static let minHeight: CGFloat = 560
 }
 
 @MainActor
@@ -49,7 +49,7 @@ final class SettingsPanelController: NSObject, NSWindowDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Cursor Popup Settings"
+            window.title = "Umbrella Helper Settings"
             window.delegate = self
             window.contentViewController = hosting
             window.setContentSize(contentSize)

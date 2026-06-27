@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct CursorPopupApp: App {
+struct UmbrellaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

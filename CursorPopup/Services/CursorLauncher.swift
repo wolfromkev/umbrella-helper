@@ -184,7 +184,7 @@ enum CursorLauncher {
         }
 
         var lines = [
-            "Continuing from Cursor Popup.",
+            "Continuing from Umbrella Helper.",
             "",
             lastUser.text,
         ]
@@ -202,7 +202,7 @@ enum CursorLauncher {
         sessionID: String?
     ) -> String {
         var lines = [
-            "Please continue this conversation from Cursor Popup.",
+            "Please continue this conversation from Umbrella Helper.",
             "",
         ]
 
@@ -227,7 +227,7 @@ enum CursorLauncher {
             return "\(speaker): \(message.text)"
         }.joined(separator: "\n\n")
 
-        return "Continue this conversation from Cursor Popup:\n\n\(transcript)"
+        return "Continue this conversation from Umbrella Helper:\n\n\(transcript)"
     }
 
     private static func trimForDeeplink(_ prompt: String) -> String {

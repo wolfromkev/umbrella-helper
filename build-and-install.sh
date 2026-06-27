@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build Cursor Popup, install to /Applications, and relaunch.
+# Build Umbrella Helper, install to /Applications, and relaunch.
 # Usage: ./build-and-install.sh [--no-launch] [install-dir]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="Cursor Popup"
-BUNDLE_ID="com.kevinwolfrom.CursorPopup"
+APP_NAME="Umbrella Helper"
+BUNDLE_ID="com.kevinwolfrom.umbrella"
 LAUNCH_AFTER=true
 INSTALL_DIR="/Applications"
 
@@ -54,7 +54,7 @@ quit_running_app() {
   sleep 0.5
 }
 
-echo "==> Cursor Popup — build and install"
+echo "==> Umbrella Helper — build and install"
 quit_running_app
 
 "$ROOT/install.sh" "$INSTALL_DIR"

@@ -1,77 +1,59 @@
 #!/usr/bin/env swift
 import AppKit
 
-enum RenderPencil {
-    static let tip: [CGPoint] = [
-        CGPoint(x: 0.10, y: 0.12),
-        CGPoint(x: 0.34, y: 0.36),
-        CGPoint(x: 0.22, y: 0.22),
-    ]
-
-    static let body: [CGPoint] = [
-        CGPoint(x: 0.34, y: 0.36),
-        CGPoint(x: 0.68, y: 0.70),
-        CGPoint(x: 0.60, y: 0.78),
-        CGPoint(x: 0.26, y: 0.44),
-    ]
-
-    static let eraser: [CGPoint] = [
-        CGPoint(x: 0.68, y: 0.70),
-        CGPoint(x: 0.86, y: 0.88),
-        CGPoint(x: 0.78, y: 0.96),
-        CGPoint(x: 0.60, y: 0.78),
-    ]
-
-    static let polygons = [tip, body, eraser]
-
+enum RenderUmbrella {
     static func drawLogo(into context: CGContext, size: CGFloat) {
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
-        let cornerRadius = size * 0.22
-        let background = CGPath(
-            roundedRect: rect,
-            cornerWidth: cornerRadius,
-            cornerHeight: cornerRadius,
-            transform: nil
-        )
-        context.addPath(background)
-        context.clip()
+        context.clear(rect)
 
-        let colors = [
-            CGColor(red: 0.10, green: 0.10, blue: 0.10, alpha: 1),
-            CGColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1),
-        ] as CFArray
-        let gradient = CGGradient(
-            colorsSpace: CGColorSpaceCreateDeviceRGB(),
-            colors: colors,
-            locations: [0, 1]
-        )!
-        context.drawLinearGradient(
-            gradient,
-            start: CGPoint(x: 0, y: size),
-            end: CGPoint(x: size, y: 0),
-            options: []
-        )
+        // Keep a little breathing room so tiny icons remain crisp.
+        let drawRect = rect.insetBy(dx: size * 0.10, dy: size * 0.08)
+        let canopyTopY = drawRect.maxY - drawRect.height * 0.08
+        let canopyBaseY = drawRect.midY + drawRect.height * 0.06
+        let centerX = drawRect.midX
+        let canopyHalfWidth = drawRect.width * 0.46
+        let black = CGColor(red: 0.02, green: 0.02, blue: 0.02, alpha: 1)
 
-        let inset = size * 0.10
-        let drawRect = rect.insetBy(dx: inset, dy: inset)
-        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.92))
-        for polygon in polygons {
-            guard let first = polygon.first else { continue }
-            context.beginPath()
-            context.move(to: mapped(first, in: drawRect))
-            for point in polygon.dropFirst() {
-                context.addLine(to: mapped(point, in: drawRect))
-            }
-            context.closePath()
-            context.fillPath()
-        }
-    }
-
-    private static func mapped(_ unit: CGPoint, in rect: CGRect) -> CGPoint {
-        CGPoint(
-            x: rect.minX + unit.x * rect.width,
-            y: rect.maxY - unit.y * rect.height
+        let canopy = CGMutablePath()
+        canopy.move(to: CGPoint(x: centerX - canopyHalfWidth, y: canopyBaseY))
+        canopy.addCurve(
+            to: CGPoint(x: centerX + canopyHalfWidth, y: canopyBaseY),
+            control1: CGPoint(x: centerX - canopyHalfWidth * 0.62, y: canopyTopY),
+            control2: CGPoint(x: centerX + canopyHalfWidth * 0.62, y: canopyTopY)
         )
+        canopy.addLine(to: CGPoint(x: centerX + canopyHalfWidth * 0.92, y: canopyBaseY - drawRect.height * 0.02))
+        canopy.addCurve(
+            to: CGPoint(x: centerX - canopyHalfWidth * 0.92, y: canopyBaseY - drawRect.height * 0.02),
+            control1: CGPoint(x: centerX + canopyHalfWidth * 0.52, y: canopyBaseY - drawRect.height * 0.24),
+            control2: CGPoint(x: centerX - canopyHalfWidth * 0.52, y: canopyBaseY - drawRect.height * 0.24)
+        )
+        canopy.closeSubpath()
+
+        context.setFillColor(black)
+        context.addPath(canopy)
+        context.fillPath()
+
+        context.setStrokeColor(black)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setLineWidth(max(1.0, size * 0.06))
+
+        let shaftTop = CGPoint(x: centerX, y: canopyBaseY - drawRect.height * 0.03)
+        let shaftBottom = CGPoint(x: centerX, y: drawRect.minY + drawRect.height * 0.22)
+        context.beginPath()
+        context.move(to: shaftTop)
+        context.addLine(to: shaftBottom)
+        context.strokePath()
+
+        let hook = CGMutablePath()
+        hook.move(to: shaftBottom)
+        hook.addCurve(
+            to: CGPoint(x: centerX + drawRect.width * 0.18, y: drawRect.minY + drawRect.height * 0.18),
+            control1: CGPoint(x: centerX + drawRect.width * 0.01, y: drawRect.minY + drawRect.height * 0.06),
+            control2: CGPoint(x: centerX + drawRect.width * 0.18, y: drawRect.minY + drawRect.height * 0.08)
+        )
+        context.addPath(hook)
+        context.strokePath()
     }
 
     static func writePNG(at path: String, size: Int) {
@@ -113,7 +95,7 @@ let brandingDir = repoRoot.appendingPathComponent("branding")
 let logoMarkDir = repoRoot.appendingPathComponent("CursorPopup/Resources/Assets.xcassets/LogoMark.imageset")
 let appIconDir = repoRoot.appendingPathComponent("CursorPopup/Resources/Assets.xcassets/AppIcon.appiconset")
 
-RenderPencil.writePNG(at: brandingDir.appendingPathComponent("icon-1024.png").path, size: 1024)
+RenderUmbrella.writePNG(at: brandingDir.appendingPathComponent("icon-1024.png").path, size: 1024)
 
 let logoMarkSizes: [(String, Int)] = [
     ("logomark-128.png", 128),
@@ -121,7 +103,7 @@ let logoMarkSizes: [(String, Int)] = [
     ("logomark-512.png", 512),
 ]
 for (name, size) in logoMarkSizes {
-    RenderPencil.writePNG(at: logoMarkDir.appendingPathComponent(name).path, size: size)
+    RenderUmbrella.writePNG(at: logoMarkDir.appendingPathComponent(name).path, size: size)
 }
 
 let appIconSizes: [(String, Int)] = [
@@ -137,7 +119,7 @@ let appIconSizes: [(String, Int)] = [
     ("icon-512@2x.png", 1024),
 ]
 for (name, size) in appIconSizes {
-    RenderPencil.writePNG(at: appIconDir.appendingPathComponent(name).path, size: size)
+    RenderUmbrella.writePNG(at: appIconDir.appendingPathComponent(name).path, size: size)
 }
 
-print("Rendered pencil branding assets.")
+print("Rendered umbrella branding assets.")
