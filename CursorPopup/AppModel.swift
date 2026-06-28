@@ -869,6 +869,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     private let screenRecorder = UmbrellaScreenRecorder()
     private var recordingOverlay: UmbrellaRecordingOverlay?
     private var areaSelector: UmbrellaAreaSelectionOverlay?
+    private var windowSelector: UmbrellaWindowSelectionOverlay?
     private var startRecordingTask: Task<Void, Never>?
     private var recordingStartGeneration = 0
     private var isStartingRecording = false
@@ -948,9 +949,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     func takeWindowSnip() {
-        _ = ensureScreenCaptureAccess()
-        let output = screenshotOutputPath()
-        runScreencapture(arguments: ["-i", "-w", "-x", output], outputPath: output, reveal: revealScreenshotInFinder)
+        presentWindowSelector()
     }
 
     func takeFullScreenSnip() {
@@ -995,7 +994,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         recordingStartGeneration += 1
         let generation = recordingStartGeneration
         isStartingRecording = true
-        logDebug("record begin: requesting permissions")
+        logDebug("record begin: appKit selection=\(selection)")
 
         startRecordingTask?.cancel()
         startRecordingTask = Task { @MainActor in
@@ -1103,8 +1102,28 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         logDebug("record: cancelled by user")
     }
 
+    private func presentWindowSelector() {
+        guard areaSelector == nil, windowSelector == nil, !isStartingRecording, !isRecording else { return }
+        _ = ensureScreenCaptureAccess()
+        NSApp.activate(ignoringOtherApps: true)
+        logDebug("snip: presenting window selector")
+        let selector = UmbrellaWindowSelectionOverlay(
+            onComplete: { [weak self] selection in
+                self?.windowSelector = nil
+                self?.logDebug("snip: window selection complete")
+                self?.finishImageSnip(selection: selection)
+            },
+            onCancel: { [weak self] in
+                self?.windowSelector = nil
+                self?.logDebug("snip: window selection cancelled")
+            }
+        )
+        windowSelector = selector
+        selector.present()
+    }
+
     private func presentAreaSelector(preferTextCopy: Bool = false) {
-        guard areaSelector == nil, !isStartingRecording, !isRecording else { return }
+        guard areaSelector == nil, windowSelector == nil, !isStartingRecording, !isRecording else { return }
         _ = ensureScreenCaptureAccess()
         NSApp.activate(ignoringOtherApps: true)
         logDebug("snip: presenting area selector\(preferTextCopy ? " (text copy)" : "")")
@@ -1179,9 +1198,20 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     private func captureSelectionRegion(_ selection: CGRect, outputPath: String, completion: @escaping (Bool) -> Void) {
+        let appKitSelection = NSRect(x: selection.origin.x, y: selection.origin.y, width: selection.width, height: selection.height)
+        let cgSelection = UmbrellaScreenCoordinateSpace.cgWindowBounds(fromAppKit: appKitSelection)
+        logDebug("snip capture appKit=\(appKitSelection) cg=\(cgSelection)")
+
+        if let image = UmbrellaScreenCoordinateSpace.captureImage(fromAppKitSelection: appKitSelection),
+           UmbrellaScreenCoordinateSpace.writePNG(image, to: outputPath) {
+            logDebug("snip capture: CGWindowListCreateImage ok")
+            completion(true)
+            return
+        }
+
         ensureDirectory(screenshotFolderPath)
         let args = Self.screencaptureRegionArguments(for: selection, outputPath: outputPath)
-        logDebug("snip run: screencapture \(args.joined(separator: " "))")
+        logDebug("snip capture fallback: screencapture \(args.joined(separator: " "))")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = args
@@ -1206,12 +1236,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     private static func screencaptureRegionArguments(for selection: CGRect, outputPath: String) -> [String] {
-        let globalTop = NSScreen.screens.map(\.frame.maxY).max() ?? 0
-        let x = Int(selection.minX.rounded())
-        let y = Int((globalTop - selection.maxY).rounded())
-        let w = max(1, Int(selection.width.rounded()))
-        let h = max(1, Int(selection.height.rounded()))
-        return ["-R", "\(x),\(y),\(w),\(h)", "-x", outputPath]
+        UmbrellaScreenCoordinateSpace.screencaptureRegionArguments(for: selection, outputPath: outputPath)
     }
 
     private func runScreencapture(arguments: [String], outputPath: String, reveal: Bool) {
@@ -1745,19 +1770,120 @@ enum UmbrellaScreenCoordinateSpace {
         return NSScreen.main ?? NSScreen.screens.first
     }
 
-    static var mainDisplayAppKitMaxY: CGFloat {
-        mainScreen?.frame.maxY ?? NSScreen.screens.map(\.frame.maxY).max() ?? 0
+    static var appKitGlobalMaxY: CGFloat {
+        NSScreen.screens.map(\.frame.maxY).max() ?? 0
     }
 
+    /// Top edge of the main display in AppKit global coordinates (CG/screencapture Y=0 reference).
+    static var mainDisplayAppKitMaxY: CGFloat {
+        mainScreen?.frame.maxY ?? appKitGlobalMaxY
+    }
+
+    /// CGWindow bounds and `screencapture -R` use a top-left origin anchored to the main display.
+    static func appKitRect(fromCGWindowBounds rect: CGRect) -> NSRect {
+        NSRect(
+            x: rect.origin.x,
+            y: mainDisplayAppKitMaxY - rect.origin.y - rect.height,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    static func cgWindowBounds(fromAppKit rect: NSRect) -> CGRect {
+        CGRect(
+            x: rect.origin.x,
+            y: mainDisplayAppKitMaxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    static func screenPoint(from event: NSEvent, in view: NSView) -> NSPoint {
+        guard let window = view.window else { return NSEvent.mouseLocation }
+        let pointInView = view.convert(event.locationInWindow, from: nil)
+        return window.convertToScreen(NSRect(origin: pointInView, size: .zero)).origin
+    }
+
+    static func screencaptureRegionArguments(for selection: CGRect, outputPath: String) -> [String] {
+        let cgRect = cgWindowBounds(fromAppKit: NSRect(x: selection.origin.x, y: selection.origin.y, width: selection.width, height: selection.height))
+        let x = Int(cgRect.origin.x.rounded())
+        let y = Int(cgRect.origin.y.rounded())
+        let w = max(1, Int(cgRect.width.rounded()))
+        let h = max(1, Int(cgRect.height.rounded()))
+        return ["-R", "\(x),\(y),\(w),\(h)", "-x", outputPath]
+    }
+
+    /// Top-left corner of a display in the main-anchored Core Graphics coordinate space.
+    static func displayTopLeftCG(for screen: NSScreen) -> CGPoint {
+        CGPoint(x: screen.frame.minX, y: mainDisplayAppKitMaxY - screen.frame.maxY)
+    }
+
+    /// ScreenCaptureKit `sourceRect` for a display — display-local, top-left origin, in points.
     static func sourceRect(for selection: CGRect, on screen: NSScreen) -> CGRect {
         let intersection = screen.frame.intersection(selection)
-        guard !intersection.isNull else { return .zero }
-        return CGRect(
-            x: intersection.origin.x - screen.frame.origin.x,
-            y: screen.frame.maxY - intersection.maxY,
+        guard !intersection.isNull, intersection.width > 0, intersection.height > 0 else { return .zero }
+
+        let appKitIntersection = NSRect(
+            x: intersection.origin.x,
+            y: intersection.origin.y,
             width: intersection.width,
             height: intersection.height
         )
+        let cgIntersection = cgWindowBounds(fromAppKit: appKitIntersection)
+        let displayOrigin = displayTopLeftCG(for: screen)
+        return CGRect(
+            x: cgIntersection.origin.x - displayOrigin.x,
+            y: cgIntersection.origin.y - displayOrigin.y,
+            width: cgIntersection.width,
+            height: cgIntersection.height
+        )
+    }
+
+    static func captureImage(fromAppKitSelection selection: NSRect) -> CGImage? {
+        let captureRect = cgWindowBounds(fromAppKit: selection)
+        guard captureRect.width > 0, captureRect.height > 0 else { return nil }
+        return CGWindowListCreateImage(captureRect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution)
+    }
+
+    @discardableResult
+    static func writePNG(_ image: CGImage, to outputPath: String) -> Bool {
+        let rep = NSBitmapImageRep(cgImage: image)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+        do {
+            try data.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func topmostWindowFrame(at point: NSPoint) -> NSRect? {
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return nil
+        }
+
+        let ourPID = ProcessInfo.processInfo.processIdentifier
+
+        for info in windowList {
+            guard let ownerPID = info[kCGWindowOwnerPID as String] as? pid_t,
+                  ownerPID != ourPID,
+                  let layer = info[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let alpha = info[kCGWindowAlpha as String] as? Double,
+                  alpha > 0.01,
+                  let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+                  bounds.width > 2,
+                  bounds.height > 2
+            else { continue }
+
+            let appKitFrame = appKitRect(fromCGWindowBounds: bounds)
+            if NSMouseInRect(point, appKitFrame, false) {
+                return appKitFrame
+            }
+        }
+
+        return nil
     }
 }
 
@@ -1977,12 +2103,13 @@ final class UmbrellaAreaSelectionOverlay {
             window.orderFrontRegardless()
         }
 
+        refreshOverlays()
         if startPoint != nil {
-            overlayWindows.first?.makeKey()
+            overlayWindows.first { $0.targetScreen.frame.contains(NSEvent.mouseLocation) }?.makeKey()
+                ?? overlayWindows.first?.makeKey()
         } else {
             overlayWindows.first?.makeKeyAndOrderFront(nil)
         }
-        refreshOverlays()
     }
 
     fileprivate func beginSelection(at point: NSPoint, in view: OverlayView) {
@@ -2091,11 +2218,14 @@ final class UmbrellaAreaSelectionOverlay {
     fileprivate final class OverlayWindow: NSWindow {
         var selectionRect: NSRect = .zero
         var showsTextCopyIndicator = false
+        let targetScreen: NSScreen
         private weak var selector: UmbrellaAreaSelectionOverlay?
 
         init(screen: NSScreen, selector: UmbrellaAreaSelectionOverlay) {
+            self.targetScreen = screen
             self.selector = selector
             super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            setFrame(screen.frame, display: false)
             level = .screenSaver
             isOpaque = false
             backgroundColor = .clear
@@ -2103,7 +2233,12 @@ final class UmbrellaAreaSelectionOverlay {
             ignoresMouseEvents = false
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             acceptsMouseMovedEvents = true
-            contentView = OverlayView(selector: selector)
+            contentView = OverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), selector: selector)
+        }
+
+        override func setFrame(_ frameRect: NSRect, display displayFlag: Bool) {
+            super.setFrame(frameRect, display: displayFlag)
+            contentView?.setFrameSize(frameRect.size)
         }
 
         override var canBecomeKey: Bool { true }
@@ -2118,12 +2253,16 @@ final class UmbrellaAreaSelectionOverlay {
     fileprivate final class OverlayView: NSView {
         private weak var selector: UmbrellaAreaSelectionOverlay?
 
-        init(selector: UmbrellaAreaSelectionOverlay) {
+        init(frame frameRect: NSRect, selector: UmbrellaAreaSelectionOverlay) {
             self.selector = selector
-            super.init(frame: .zero)
+            super.init(frame: frameRect)
             wantsLayer = true
             layerContentsRedrawPolicy = .onSetNeedsDisplay
             layer?.backgroundColor = .clear
+        }
+
+        convenience init(selector: UmbrellaAreaSelectionOverlay) {
+            self.init(frame: .zero, selector: selector)
         }
 
         @available(*, unavailable)
@@ -2136,23 +2275,30 @@ final class UmbrellaAreaSelectionOverlay {
         override func mouseDown(with event: NSEvent) {
             guard let selector else { return }
             window?.makeKey()
-            selector.beginSelection(at: NSEvent.mouseLocation, in: self)
+            selector.beginSelection(at: UmbrellaScreenCoordinateSpace.screenPoint(from: event, in: self), in: self)
         }
 
         override func draw(_ dirtyRect: NSRect) {
             guard let window = window as? OverlayWindow else { return }
-            NSColor.black.withAlphaComponent(0.18).setFill()
-            bounds.fill()
 
+            let dimPath = NSBezierPath(rect: bounds)
             let selection = window.selectionRect
-            guard selection.width > 0, selection.height > 0 else { return }
-            let localSelection = window.convertFromScreen(selection)
-            guard localSelection.intersects(bounds) else { return }
-            let visible = localSelection.intersection(bounds)
-            guard visible.width > 0, visible.height > 0 else { return }
+            var visibleSelection: NSRect?
+            if selection.width > 0, selection.height > 0 {
+                let localSelection = window.convertFromScreen(selection)
+                if localSelection.intersects(bounds) {
+                    let visible = localSelection.intersection(bounds)
+                    if visible.width > 0, visible.height > 0 {
+                        visibleSelection = visible
+                        dimPath.append(NSBezierPath(rect: visible))
+                    }
+                }
+            }
+            dimPath.windingRule = .evenOdd
+            NSColor.black.withAlphaComponent(0.18).setFill()
+            dimPath.fill()
 
-            NSColor.clear.setFill()
-            visible.fill(using: .clear)
+            guard let visible = visibleSelection else { return }
 
             let path = NSBezierPath(rect: visible)
             path.lineWidth = 2.5
@@ -2203,6 +2349,211 @@ final class UmbrellaAreaSelectionOverlay {
                 y: pillRect.midY - textSize.height / 2
             )
             (label as NSString).draw(at: textOrigin, withAttributes: attributes)
+        }
+    }
+}
+
+final class UmbrellaWindowSelectionOverlay {
+    private var overlayWindows: [WindowOverlayWindow] = []
+    private var highlightedWindow: NSRect = .zero
+    private var keyEventMonitor: Any?
+    private var globalKeyEventMonitor: Any?
+    private var mouseMoveMonitor: Any?
+    private var isFinishing = false
+    private var screenParametersObserver: NSObjectProtocol?
+    private let onComplete: (CGRect) -> Void
+    private let onCancel: () -> Void
+
+    init(onComplete: @escaping (CGRect) -> Void, onCancel: @escaping () -> Void) {
+        self.onComplete = onComplete
+        self.onCancel = onCancel
+    }
+
+    func present() {
+        isFinishing = false
+        NSCursor.pointingHand.push()
+        rebuildOverlayWindows()
+        updateHighlightedWindow(at: NSEvent.mouseLocation)
+
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.async { self?.rebuildOverlayWindows() }
+        }
+
+        overlayWindows.first?.makeKeyAndOrderFront(nil)
+
+        mouseMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+            self?.updateHighlightedWindow(at: NSEvent.mouseLocation)
+            return event
+        }
+
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.keyCode == 53 else { return event }
+            self.finish(cancelled: true)
+            return nil
+        }
+        globalKeyEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return }
+            self?.finish(cancelled: true)
+        }
+    }
+
+    private func rebuildOverlayWindows() {
+        guard !isFinishing else { return }
+        overlayWindows.forEach { $0.orderOut(nil) }
+        overlayWindows.removeAll()
+
+        for screen in NSScreen.screens {
+            let window = WindowOverlayWindow(screen: screen, selector: self)
+            window.highlightRect = highlightedWindow
+            overlayWindows.append(window)
+            window.orderFrontRegardless()
+        }
+        refreshOverlays()
+    }
+
+    fileprivate func selectWindow(at point: NSPoint) {
+        updateHighlightedWindow(at: point)
+        guard highlightedWindow.width > 2, highlightedWindow.height > 2 else { return }
+        finish(cancelled: false, selection: highlightedWindow)
+    }
+
+    fileprivate func cancelSelection() {
+        finish(cancelled: true)
+    }
+
+    fileprivate func updateHighlightedWindow(at point: NSPoint) {
+        highlightedWindow = UmbrellaScreenCoordinateSpace.topmostWindowFrame(at: point) ?? .zero
+        refreshOverlays()
+    }
+
+    private func refreshOverlays() {
+        for window in overlayWindows {
+            window.highlightRect = highlightedWindow
+            window.contentView?.needsDisplay = true
+        }
+    }
+
+    private func finish(cancelled: Bool, selection: NSRect = .zero) {
+        guard !isFinishing else { return }
+        isFinishing = true
+
+        if let mouseMoveMonitor { NSEvent.removeMonitor(mouseMoveMonitor); self.mouseMoveMonitor = nil }
+        if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor); self.keyEventMonitor = nil }
+        if let globalKeyEventMonitor { NSEvent.removeMonitor(globalKeyEventMonitor); self.globalKeyEventMonitor = nil }
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+            self.screenParametersObserver = nil
+        }
+        NSCursor.pop()
+        highlightedWindow = .zero
+        overlayWindows.forEach { $0.orderOut(nil) }
+        overlayWindows.removeAll()
+
+        let completion = onComplete
+        let cancellation = onCancel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            if cancelled {
+                cancellation()
+            } else {
+                completion(selection)
+            }
+        }
+    }
+
+    fileprivate final class WindowOverlayWindow: NSWindow {
+        var highlightRect: NSRect = .zero
+        let targetScreen: NSScreen
+        private weak var selector: UmbrellaWindowSelectionOverlay?
+
+        init(screen: NSScreen, selector: UmbrellaWindowSelectionOverlay) {
+            self.targetScreen = screen
+            self.selector = selector
+            super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            setFrame(screen.frame, display: false)
+            level = .screenSaver
+            isOpaque = false
+            backgroundColor = .clear
+            hasShadow = false
+            ignoresMouseEvents = false
+            collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            acceptsMouseMovedEvents = true
+            contentView = WindowOverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), selector: selector)
+        }
+
+        override func setFrame(_ frameRect: NSRect, display displayFlag: Bool) {
+            super.setFrame(frameRect, display: displayFlag)
+            contentView?.setFrameSize(frameRect.size)
+        }
+
+        override var canBecomeKey: Bool { true }
+        override var canBecomeMain: Bool { true }
+
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 53 { selector?.cancelSelection(); return }
+            super.keyDown(with: event)
+        }
+    }
+
+    fileprivate final class WindowOverlayView: NSView {
+        private weak var selector: UmbrellaWindowSelectionOverlay?
+
+        init(frame frameRect: NSRect, selector: UmbrellaWindowSelectionOverlay) {
+            self.selector = selector
+            super.init(frame: frameRect)
+            wantsLayer = true
+            layerContentsRedrawPolicy = .onSetNeedsDisplay
+            layer?.backgroundColor = .clear
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override var isOpaque: Bool { false }
+        override var isFlipped: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseMoved(with event: NSEvent) {
+            selector?.updateHighlightedWindow(at: UmbrellaScreenCoordinateSpace.screenPoint(from: event, in: self))
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let selector else { return }
+            window?.makeKey()
+            selector.selectWindow(at: UmbrellaScreenCoordinateSpace.screenPoint(from: event, in: self))
+        }
+
+        override func draw(_ dirtyRect: NSRect) {
+            guard let window = window as? WindowOverlayWindow else { return }
+
+            let dimPath = NSBezierPath(rect: bounds)
+            let highlight = window.highlightRect
+            var visibleHighlight: NSRect?
+            if highlight.width > 0, highlight.height > 0 {
+                let localHighlight = window.convertFromScreen(highlight)
+                if localHighlight.intersects(bounds) {
+                    let visible = localHighlight.intersection(bounds)
+                    if visible.width > 0, visible.height > 0 {
+                        visibleHighlight = visible
+                        dimPath.append(NSBezierPath(rect: visible))
+                    }
+                }
+            }
+            dimPath.windingRule = .evenOdd
+            NSColor.black.withAlphaComponent(0.18).setFill()
+            dimPath.fill()
+
+            guard let visible = visibleHighlight else { return }
+
+            let path = NSBezierPath(rect: visible)
+            path.lineWidth = 2.5
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                NSColor.systemOrange.setStroke()
+                path.stroke()
+            }
         }
     }
 }
@@ -2276,22 +2627,36 @@ final class UmbrellaRecordingOverlay {
 
     fileprivate final class BorderWindow: NSWindow {
         var pulseOn = false
+        let targetScreen: NSScreen
+
         init(screen: NSScreen, selection: NSRect) {
+            self.targetScreen = screen
             super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            setFrame(screen.frame, display: false)
             level = .screenSaver
             isOpaque = false
             backgroundColor = .clear
             ignoresMouseEvents = true
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            contentView = BorderView(selection: selection)
+            contentView = BorderView(frame: NSRect(origin: .zero, size: screen.frame.size), selection: selection)
+        }
+
+        override func setFrame(_ frameRect: NSRect, display displayFlag: Bool) {
+            super.setFrame(frameRect, display: displayFlag)
+            contentView?.setFrameSize(frameRect.size)
         }
     }
 
     private final class BorderView: NSView {
         let selection: NSRect
-        init(selection: NSRect) {
+
+        init(frame frameRect: NSRect, selection: NSRect) {
             self.selection = selection
-            super.init(frame: .zero)
+            super.init(frame: frameRect)
+        }
+
+        convenience init(selection: NSRect) {
+            self.init(frame: .zero, selection: selection)
         }
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
