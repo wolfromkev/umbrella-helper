@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in Cursor Popup.
+Thanks for your interest in Umbrella Helper.
 
 ## Build
 
@@ -10,7 +10,7 @@ Thanks for your interest in Cursor Popup.
 ./build-and-install.sh
 ```
 
-Open `CursorPopup.xcodeproj` in Xcode for debugging.
+Open `UmbrellaHelper.xcodeproj` in Xcode for debugging.
 
 ## Pull requests
 

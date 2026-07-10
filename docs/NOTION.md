@@ -7,7 +7,7 @@ Press **F4** (default) to open a compact task popup. This is optional — the ch
 1. Create a [Notion integration](https://www.notion.so/my-integrations) and copy the **Internal integration secret**.
 2. Share your tasks database with that integration (⋯ on the database → **Connections**).
 3. Copy the database ID from the database URL (`notion.so/.../<32-char-id>?...`).
-4. In Cursor Popup **Settings → Notion**, paste the token and database ID.
+4. In Umbrella Helper **Settings → Notion**, paste the token and database ID.
 
 ## Expected database schema
 

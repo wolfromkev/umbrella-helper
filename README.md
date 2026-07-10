@@ -1,7 +1,7 @@
-# Cursor Popup
+# Umbrella Helper
 
 <p align="center">
-  <img src="branding/icon-1024.png" alt="Cursor Popup logo" width="128" height="128">
+  <img src="branding/icon-1024.png" alt="Umbrella Helper logo" width="128" height="128">
 </p>
 
 A native macOS menu bar app that opens a floating chat bar and sends prompts to the **Cursor `agent` CLI** in ask mode against a workspace folder you choose.
@@ -28,7 +28,7 @@ A native macOS menu bar app that opens a floating chat bar and sends prompts to 
 
 ```bash
 git clone <your-repo-url>
-cd CursorPopup
+cd UmbrellaHelper
 chmod +x install.sh
 ./install.sh
 ```
@@ -39,14 +39,14 @@ Or build, install, and relaunch in one step:
 ./build-and-install.sh
 ```
 
-The script builds a Release app, copies it to `/Applications/Cursor Popup.app`, and uses ad-hoc code signing. On first launch, macOS may block an unsigned build — right-click the app → **Open**, or allow it in **Privacy & Security**.
+The script builds a Release app, copies it to `/Applications/Umbrella Helper.app`, and uses ad-hoc code signing. On first launch, macOS may block an unsigned build — right-click the app → **Open**, or allow it in **Privacy & Security**.
 
 ## First-time setup
 
-1. Launch **Cursor Popup** from Applications.
+1. Launch **Umbrella Helper** from Applications.
 2. Open **Settings** (gear in the chat bar or menu bar icon).
 3. Under **Workspace**, click **Add folder…** and choose the project directory you want the agent to use.
-4. Under **Permissions**, enable **Accessibility** for Cursor Popup (needed for popup placement and click-outside dismiss).
+4. Under **Permissions**, enable **Accessibility** for Umbrella Helper (needed for popup placement and click-outside dismiss).
 5. *(Optional)* Under **Notion**, add an [integration token](https://www.notion.so/my-integrations) and your tasks database ID. See [docs/NOTION.md](docs/NOTION.md).
 
 Default shortcuts: **F4** Notion task · **⌘⇧N** new popup chat (Cursor chat disabled by default; all configurable in Settings).
@@ -80,10 +80,10 @@ Open-source assets live in `branding/`:
 
 ## Development
 
-Open `CursorPopup.xcodeproj` in Xcode, or:
+Open `UmbrellaHelper.xcodeproj` in Xcode, or:
 
 ```bash
-xcodebuild -project CursorPopup.xcodeproj -scheme CursorPopup -configuration Debug build
+xcodebuild -project UmbrellaHelper.xcodeproj -scheme UmbrellaHelper -configuration Debug build
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Before your first public GitHub push, run [scripts/pre-publish-check.sh](scripts/pre-publish-check.sh) and read [docs/PUBLISHING.md](docs/PUBLISHING.md).

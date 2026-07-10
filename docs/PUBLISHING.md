@@ -63,7 +63,7 @@ Push only after Option A or B. Do not push first and scrub later — GitHub reta
 
 ## 4. What is OK in the repo
 
-- Bundle ID `com.kevinwolfrom.CursorPopup` (author identifier; forks can change it)
+- Bundle ID `com.kevinwolfrom.umbrella` (author identifier; forks can change it)
 - Generic build scripts and MIT license with your name
 
 ## 5. After push

@@ -55,6 +55,9 @@ struct HotKeyBinding: Codable, Equatable {
         modifiers: UInt32(shiftKey)
     )
 
+    /// No default — Film Mode starts unbound until the user records a shortcut.
+    static let filmModeDefault: HotKeyBinding? = nil
+
     var displayName: String {
         var parts: [String] = []
         if modifiers & UInt32(controlKey) != 0 { parts.append("⌃") }
@@ -199,6 +202,7 @@ final class AppSettings {
         static let brightnessUpHotKey = "brightnessUpHotKey"
         static let warmthUpHotKey = "warmthUpHotKey"
         static let warmthDownHotKey = "warmthDownHotKey"
+        static let filmModeHotKey = "filmModeHotKey"
         static let sunScreenPresetHotKeys = "sunScreenPresetHotKeys"
         static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
@@ -383,6 +387,25 @@ final class AppSettings {
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Keys.warmthDownHotKey)
+            }
+        }
+    }
+
+    var filmModeHotKey: HotKeyBinding? {
+        get {
+            guard
+                let data = UserDefaults.standard.data(forKey: Keys.filmModeHotKey),
+                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
+            else {
+                return nil
+            }
+            return binding
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Keys.filmModeHotKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.filmModeHotKey)
             }
         }
     }

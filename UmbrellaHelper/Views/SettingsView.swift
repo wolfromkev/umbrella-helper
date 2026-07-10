@@ -19,6 +19,7 @@ private enum KeybindingTarget: Hashable {
     case brightnessUp
     case warmthUp
     case warmthDown
+    case filmMode
     case sunPreset(String)
 }
 
@@ -37,6 +38,7 @@ struct SettingsView: View {
     @State private var brightnessUpHotKey = AppSettings.shared.brightnessUpHotKey
     @State private var warmthUpHotKey = AppSettings.shared.warmthUpHotKey
     @State private var warmthDownHotKey = AppSettings.shared.warmthDownHotKey
+    @State private var filmModeHotKey = AppSettings.shared.filmModeHotKey
     @State private var sunPresetHotKeys = AppSettings.shared.sunScreenPresetHotKeys
     @State private var recordingTarget: KeybindingTarget?
     @State private var shortcutConflict: String?
@@ -99,8 +101,8 @@ struct SettingsView: View {
                     readOnlyBindingRow("Toggle light", value: "Hyper + F1")
                     readOnlyBindingRow("Brightness down", value: "Hyper + F9")
                     readOnlyBindingRow("Brightness up", value: "Hyper + F10")
-                    readOnlyBindingRow("Warmth down", value: "Hyper + F11")
-                    readOnlyBindingRow("Warmth up", value: "Hyper + F12")
+                    readOnlyBindingRow("Warmth up", value: "Hyper + F11")
+                    readOnlyBindingRow("Warmth down", value: "Hyper + F12")
                     Text("Managed in Karabiner. Umbrella Helper shows these bindings for reference only.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -111,6 +113,7 @@ struct SettingsView: View {
                     editableBindingRow("Brightness up", target: .brightnessUp)
                     editableBindingRow("Warmer", target: .warmthUp)
                     editableBindingRow("Cooler", target: .warmthDown)
+                    editableBindingRow("Film Mode", target: .filmMode)
 
                     Divider()
 
@@ -237,6 +240,7 @@ struct SettingsView: View {
                 case .brightnessUp: return brightnessUpHotKey
                 case .warmthUp: return warmthUpHotKey
                 case .warmthDown: return warmthDownHotKey
+                case .filmMode: return filmModeHotKey
                 case .sunPreset(let id): return sunPresetHotKeys[id]
                 }
             },
@@ -279,6 +283,9 @@ struct SettingsView: View {
         case .warmthDown:
             warmthDownHotKey = binding
             AppSettings.shared.warmthDownHotKey = binding
+        case .filmMode:
+            filmModeHotKey = binding
+            AppSettings.shared.filmModeHotKey = binding
         case .sunPreset(let id):
             sunPresetHotKeys[id] = binding
             AppSettings.shared.sunScreenPresetHotKeys = sunPresetHotKeys
@@ -320,6 +327,9 @@ struct SettingsView: View {
         case .warmthDown:
             warmthDownHotKey = .warmthDownDefault
             AppSettings.shared.warmthDownHotKey = .warmthDownDefault
+        case .filmMode:
+            filmModeHotKey = nil
+            AppSettings.shared.filmModeHotKey = nil
         case .sunPreset(let id):
             sunPresetHotKeys.removeValue(forKey: id)
             AppSettings.shared.sunScreenPresetHotKeys = sunPresetHotKeys
@@ -330,6 +340,8 @@ struct SettingsView: View {
 
     private func canClear(_ target: KeybindingTarget) -> Bool {
         switch target {
+        case .filmMode:
+            return filmModeHotKey != nil
         case .sunPreset(let id):
             return sunPresetHotKeys[id] != nil
         default:
@@ -338,7 +350,7 @@ struct SettingsView: View {
     }
 
     private func detectShortcutConflict() {
-        let all: [(String, HotKeyBinding)] = [
+        var all: [(String, HotKeyBinding)] = [
             ("Notion task", notionTaskHotKey),
             ("Snip area", snipAreaHotKey),
             ("Snip window", snipWindowHotKey),
@@ -349,7 +361,11 @@ struct SettingsView: View {
             ("Brightness up", brightnessUpHotKey),
             ("Warmer", warmthUpHotKey),
             ("Cooler", warmthDownHotKey),
-        ] + appModel.brightnessFeature.presets.compactMap { preset in
+        ]
+        if let filmModeHotKey {
+            all.append(("Film Mode", filmModeHotKey))
+        }
+        all += appModel.brightnessFeature.presets.compactMap { preset in
             guard let binding = sunPresetHotKeys[preset.id] else { return nil }
             return ("Preset: \(preset.name)", binding)
         }
@@ -461,6 +477,13 @@ private struct BrightnessTabView: View {
                         get: { feature.isKeepAwakeEnabled },
                         set: { feature.setKeepAwake($0) }
                     ))
+                    Toggle("Film Mode", isOn: Binding(
+                        get: { feature.isFilmModeEnabled },
+                        set: { feature.setFilmMode($0) }
+                    ))
+                    Text("Dims external monitors; leaves the built-in MacBook display unchanged.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Use location schedule", isOn: Binding(
                         get: { feature.useLocationSchedule },
                         set: { feature.setUseLocationSchedule($0) }

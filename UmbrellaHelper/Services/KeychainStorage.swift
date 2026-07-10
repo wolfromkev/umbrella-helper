@@ -2,12 +2,24 @@ import Foundation
 import Security
 
 enum KeychainStorage {
-    private static let notionTokenService = "com.cursorpopup.notion-token"
+    private static let notionTokenService = "com.kevinwolfrom.umbrella.notion-token"
     private static let notionTokenAccount = "default"
-    private static let notionTokenLabel = "Cursor Popup Notion Token"
+    private static let notionTokenLabel = "Umbrella Helper Notion Token"
+    // Pre-rename service name; read once so existing tokens migrate silently.
+    private static let legacyNotionTokenService = "com.cursorpopup.notion-token"
 
     static var notionToken: String? {
-        get { read(service: notionTokenService, account: notionTokenAccount) }
+        get {
+            if let token = read(service: notionTokenService, account: notionTokenAccount) {
+                return token
+            }
+            guard let legacy = read(service: legacyNotionTokenService, account: notionTokenAccount) else {
+                return nil
+            }
+            save(legacy, service: notionTokenService, account: notionTokenAccount, label: notionTokenLabel)
+            delete(service: legacyNotionTokenService, account: notionTokenAccount)
+            return legacy
+        }
         set {
             if let newValue, !newValue.isEmpty {
                 save(newValue, service: notionTokenService, account: notionTokenAccount, label: notionTokenLabel)

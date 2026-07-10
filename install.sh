@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PROJECT="$ROOT/CursorPopup.xcodeproj"
-SCHEME="CursorPopup"
+PROJECT="$ROOT/UmbrellaHelper.xcodeproj"
+SCHEME="UmbrellaHelper"
 APP_NAME="Umbrella Helper"
 BUILD_DIR="$ROOT/build"
 DERIVED="$BUILD_DIR/DerivedData"
@@ -35,7 +35,7 @@ ditto "$BUILT_APP" "$TARGET"
 # "could not create image from rect"). Using the same Apple Development cert
 # keeps the designated requirement constant across rebuilds.
 SIGN_IDENTITY="${UMBRELLA_SIGN_IDENTITY:-Apple Development: Kevin Wolfrom (P9P8J8ZVF9)}"
-ENTITLEMENTS="$ROOT/CursorPopup/CursorPopup.entitlements"
+ENTITLEMENTS="$ROOT/UmbrellaHelper/UmbrellaHelper.entitlements"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGN_IDENTITY"; then
   echo "Re-signing with stable identity: $SIGN_IDENTITY"
   codesign --force --deep --options runtime \

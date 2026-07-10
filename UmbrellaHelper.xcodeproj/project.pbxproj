@@ -13,7 +13,7 @@
 		B10000000000000000000025 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000027 /* SettingsView.swift */; };
 		B10000000000000000000026 /* SettingsPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000028 /* SettingsPanelController.swift */; };
 		B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000025 /* ClickOutsideDismissal.swift */; };
-		B10000000000000000000001 /* CursorPopupApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* CursorPopupApp.swift */; };
+		B10000000000000000000001 /* UmbrellaHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* UmbrellaHelperApp.swift */; };
 		B10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* AppModel.swift */; };
 		B10000000000000000000003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AppSettings.swift */; };
 		B10000000000000000000007 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000007 /* GlobalHotKey.swift */; };
@@ -34,7 +34,7 @@
 
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* Umbrella Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Umbrella Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		F10000000000000000000001 /* CursorPopupApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorPopupApp.swift; sourceTree = "<group>"; };
+		F10000000000000000000001 /* UmbrellaHelperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaHelperApp.swift; sourceTree = "<group>"; };
 		F10000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		F10000000000000000000003 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		F10000000000000000000004 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
@@ -43,7 +43,7 @@
 		F10000000000000000000009 /* PanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelController.swift; sourceTree = "<group>"; };
 		F10000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		F10000000000000000000012 /* CursorPopup.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CursorPopup.entitlements; sourceTree = "<group>"; };
+		F10000000000000000000012 /* UmbrellaHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UmbrellaHelper.entitlements; sourceTree = "<group>"; };
 		F10000000000000000000019 /* HistoryKeyHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryKeyHandler.swift; sourceTree = "<group>"; };
 		F10000000000000000000021 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
 		F10000000000000000000024 /* AttachmentThumbnailStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentThumbnailStrip.swift; sourceTree = "<group>"; };
@@ -75,24 +75,24 @@
 		G10000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				G10000000000000000000002 /* CursorPopup */,
+				G10000000000000000000002 /* UmbrellaHelper */,
 				G10000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		G10000000000000000000002 /* CursorPopup */ = {
+		G10000000000000000000002 /* UmbrellaHelper */ = {
 			isa = PBXGroup;
 			children = (
-				F10000000000000000000001 /* CursorPopupApp.swift */,
+				F10000000000000000000001 /* UmbrellaHelperApp.swift */,
 				F10000000000000000000002 /* AppModel.swift */,
 				F10000000000000000000003 /* AppSettings.swift */,
 				G10000000000000000000004 /* Views */,
 				G10000000000000000000005 /* Services */,
 				G10000000000000000000006 /* Resources */,
 				F10000000000000000000011 /* Info.plist */,
-				F10000000000000000000012 /* CursorPopup.entitlements */,
+				F10000000000000000000012 /* UmbrellaHelper.entitlements */,
 			);
-			path = CursorPopup;
+			path = UmbrellaHelper;
 			sourceTree = "<group>";
 		};
 		G10000000000000000000003 /* Products */ = {
@@ -147,9 +147,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		T10000000000000000000001 /* CursorPopup */ = {
+		T10000000000000000000001 /* UmbrellaHelper */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = L10000000000000000000003 /* Build configuration list for PBXNativeTarget "CursorPopup" */;
+			buildConfigurationList = L10000000000000000000003 /* Build configuration list for PBXNativeTarget "UmbrellaHelper" */;
 			buildPhases = (
 				P10000000000000000000001 /* Sources */,
 				C10000000000000000000001 /* Frameworks */,
@@ -159,7 +159,7 @@
 			);
 			dependencies = (
 			);
-			name = CursorPopup;
+			name = UmbrellaHelper;
 			packageProductDependencies = (
 				PKGPROD00000000000000001 /* MarkdownUI */,
 			);
@@ -182,7 +182,7 @@
 					};
 				};
 			};
-			buildConfigurationList = L10000000000000000000001 /* Build configuration list for PBXProject "CursorPopup" */;
+			buildConfigurationList = L10000000000000000000001 /* Build configuration list for PBXProject "UmbrellaHelper" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -198,7 +198,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				T10000000000000000000001 /* CursorPopup */,
+				T10000000000000000000001 /* UmbrellaHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -219,7 +219,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000000000000000000001 /* CursorPopupApp.swift in Sources */,
+				B10000000000000000000001 /* UmbrellaHelperApp.swift in Sources */,
 				B10000000000000000000002 /* AppModel.swift in Sources */,
 				B10000000000000000000003 /* AppSettings.swift in Sources */,
 				B10000000000000000000007 /* GlobalHotKey.swift in Sources */,
@@ -282,14 +282,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = CursorPopup/CursorPopup.entitlements;
+				CODE_SIGN_ENTITLEMENTS = UmbrellaHelper/UmbrellaHelper.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = CursorPopup/Info.plist;
+				INFOPLIST_FILE = UmbrellaHelper/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -306,14 +306,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = CursorPopup/CursorPopup.entitlements;
+				CODE_SIGN_ENTITLEMENTS = UmbrellaHelper/UmbrellaHelper.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = CursorPopup/Info.plist;
+				INFOPLIST_FILE = UmbrellaHelper/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -329,7 +329,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		L10000000000000000000001 /* Build configuration list for PBXProject "CursorPopup" */ = {
+		L10000000000000000000001 /* Build configuration list for PBXProject "UmbrellaHelper" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D10000000000000000000001 /* Debug */,
@@ -338,7 +338,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		L10000000000000000000003 /* Build configuration list for PBXNativeTarget "CursorPopup" */ = {
+		L10000000000000000000003 /* Build configuration list for PBXNativeTarget "UmbrellaHelper" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D10000000000000000000003 /* Debug */,

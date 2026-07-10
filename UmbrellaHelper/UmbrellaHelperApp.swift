@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct UmbrellaApp: App {
+struct UmbrellaHelperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

@@ -37,6 +37,7 @@ final class AppModel: ObservableObject {
     private let brightnessUpHotKey = GlobalHotKey(registrationID: 10)
     private let warmthUpHotKey = GlobalHotKey(registrationID: 11)
     private let warmthDownHotKey = GlobalHotKey(registrationID: 12)
+    private let filmModeHotKey = GlobalHotKey(registrationID: 14)
     private var sunPresetHotKeys: [String: GlobalHotKey] = [:]
     private var nextSunPresetHotKeyID: UInt32 = 200
     let brightnessFeature = UmbrellaBrightnessFeature()
@@ -84,6 +85,7 @@ final class AppModel: ObservableObject {
         brightnessUpHotKey.unregister()
         warmthUpHotKey.unregister()
         warmthDownHotKey.unregister()
+        filmModeHotKey.unregister()
         sunPresetHotKeys.values.forEach { $0.unregister() }
         sunPresetHotKeys.removeAll()
         settingsPanelController.closePanel()
@@ -123,6 +125,13 @@ final class AppModel: ObservableObject {
         }
         warmthDownHotKey.register(hotKeyID: settings.warmthDownHotKey) { [weak self] in
             Task { @MainActor in self?.brightnessFeature.adjustColorTemp(by: UmbrellaBrightnessFeature.colorTempStep) }
+        }
+        if let filmModeBinding = settings.filmModeHotKey {
+            filmModeHotKey.register(hotKeyID: filmModeBinding) { [weak self] in
+                Task { @MainActor in self?.brightnessFeature.toggleFilmMode() }
+            }
+        } else {
+            filmModeHotKey.unregister()
         }
         reloadSunPresetHotKeys()
     }
@@ -312,7 +321,10 @@ enum UmbrellaPermissionState {
 }
 
 private enum UmbrellaBlueLightManager {
-    static func apply(colorTemp: Int, brightness: Float, darkroom: Bool) {
+    /// Near-black gamma for Film Mode external displays (true 0 can look odd on some panels).
+    private static let filmModeExternalChannels: (Float, Float, Float) = (0.01, 0.01, 0.01)
+
+    static func apply(colorTemp: Int, brightness: Float, darkroom: Bool, filmMode: Bool) {
         let dim = max(0.05, min(1, brightness))
         let channels: (Float, Float, Float)
         if darkroom {
@@ -323,13 +335,20 @@ private enum UmbrellaBlueLightManager {
         }
 
         for display in onlineDisplayIDs() {
+            let applied = filmMode && !isBuiltInDisplay(display)
+                ? filmModeExternalChannels
+                : channels
             CGSetDisplayTransferByFormula(
                 display,
-                0, channels.0, 1,
-                0, channels.1, 1,
-                0, channels.2, 1
+                0, applied.0, 1,
+                0, applied.1, 1,
+                0, applied.2, 1
             )
         }
+    }
+
+    private static func isBuiltInDisplay(_ displayID: CGDirectDisplayID) -> Bool {
+        CGDisplayIsBuiltin(displayID) != 0
     }
 
     static func reset() {
@@ -586,6 +605,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     @Published var sunsetMinutes: Int
     @Published var transitionMinutes: Int
     @Published var isKeepAwakeEnabled: Bool
+    @Published var isFilmModeEnabled: Bool
     @Published var presets: [UmbrellaSunPreset]
     @Published var dayPresetID: String
     @Published var nightPresetID: String
@@ -593,6 +613,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
 
     private var keepAwakeActivity: NSObjectProtocol?
     private var timer: Timer?
+    private var screenChangeObserver: NSObjectProtocol?
     private let defaults = UserDefaults.standard
     private let presetKey = "umbrella.sunscreen.presets"
     private let overlayController = UmbrellaBrightnessOverlayController.shared
@@ -608,6 +629,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         sunsetMinutes = defaults.object(forKey: "umbrella.sunscreen.sunset") as? Int ?? 1200
         transitionMinutes = defaults.object(forKey: "umbrella.sunscreen.transitionMinutes") as? Int ?? 30
         isKeepAwakeEnabled = defaults.object(forKey: "umbrella.sunscreen.keepAwake") as? Bool ?? false
+        isFilmModeEnabled = defaults.object(forKey: "umbrella.sunscreen.filmMode") as? Bool ?? false
         presets = loadedPresets
         dayPresetID = defaults.string(forKey: "umbrella.sunscreen.dayPresetID")
             ?? loadedPresets.first?.id
@@ -627,11 +649,26 @@ final class UmbrellaBrightnessFeature: ObservableObject {
                 self?.refreshAutoStateIfNeeded()
             }
         }
+        if screenChangeObserver == nil {
+            screenChangeObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.apply()
+                }
+            }
+        }
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        if let screenChangeObserver {
+            NotificationCenter.default.removeObserver(screenChangeObserver)
+            self.screenChangeObserver = nil
+        }
         releaseKeepAwake()
         UmbrellaBlueLightManager.reset()
     }
@@ -686,6 +723,15 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         isKeepAwakeEnabled = enabled
         applyKeepAwake()
         save()
+    }
+
+    func setFilmMode(_ enabled: Bool) {
+        isFilmModeEnabled = enabled
+        apply()
+    }
+
+    func toggleFilmMode() {
+        setFilmMode(!isFilmModeEnabled)
     }
 
     func updateSunrise(_ minutes: Int) {
@@ -794,7 +840,12 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     }
 
     private func apply() {
-        UmbrellaBlueLightManager.apply(colorTemp: colorTemp, brightness: brightness, darkroom: isDarkroom)
+        UmbrellaBlueLightManager.apply(
+            colorTemp: colorTemp,
+            brightness: brightness,
+            darkroom: isDarkroom,
+            filmMode: isFilmModeEnabled
+        )
         save()
     }
 
@@ -830,6 +881,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         defaults.set(sunsetMinutes, forKey: "umbrella.sunscreen.sunset")
         defaults.set(transitionMinutes, forKey: "umbrella.sunscreen.transitionMinutes")
         defaults.set(isKeepAwakeEnabled, forKey: "umbrella.sunscreen.keepAwake")
+        defaults.set(isFilmModeEnabled, forKey: "umbrella.sunscreen.filmMode")
         defaults.set(dayPresetID, forKey: "umbrella.sunscreen.dayPresetID")
         defaults.set(nightPresetID, forKey: "umbrella.sunscreen.nightPresetID")
         if let data = try? JSONEncoder().encode(presets) {
@@ -874,6 +926,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     private var recordingStartGeneration = 0
     private var isStartingRecording = false
     private var requestedScreenPermissionThisSession = false
+    private var shareableContentPrewarmTask: Task<Void, Never>?
 
     init() {
         let screenshots = FileManager.default.homeDirectoryForCurrentUser
@@ -901,6 +954,8 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     func stop() {
         startRecordingTask?.cancel()
         startRecordingTask = nil
+        shareableContentPrewarmTask?.cancel()
+        shareableContentPrewarmTask = nil
         recordingOverlay?.dismiss()
         recordingOverlay = nil
         Task { await screenRecorder.cancelRecording() }
@@ -975,18 +1030,31 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         _ = ensureScreenCaptureAccess()
         NSApp.activate(ignoringOtherApps: true)
         logDebug("record: presenting area selector")
+        prewarmShareableContent()
         let selector = UmbrellaAreaSelectionOverlay(
+            // Overlay windows use sharingType=.none, so recording can start immediately.
+            completionDelay: 0,
+            selectionStrokeColor: .systemRed,
             onComplete: { [weak self] selection, _ in
                 self?.areaSelector = nil
                 self?.beginRecording(selection: selection)
             },
             onCancel: { [weak self] in
+                self?.shareableContentPrewarmTask?.cancel()
+                self?.shareableContentPrewarmTask = nil
                 self?.areaSelector = nil
                 self?.logDebug("record: selection cancelled")
             }
         )
         areaSelector = selector
         selector.present()
+    }
+
+    private func prewarmShareableContent() {
+        shareableContentPrewarmTask?.cancel()
+        shareableContentPrewarmTask = Task { [screenRecorder] in
+            await screenRecorder.prewarmShareableContent()
+        }
     }
 
     private func beginRecording(selection: CGRect) {
@@ -996,52 +1064,76 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         isStartingRecording = true
         logDebug("record begin: appKit selection=\(selection)")
 
+        // Mic permission is sync when already decided; only awaits a system prompt once.
+        var includeMic = false
+        if recordMicrophone {
+            let status = AVCaptureDevice.authorizationStatus(for: .audio)
+            if status == .authorized {
+                includeMic = true
+                microphoneState = .allowed
+            }
+        }
+
+        let config = UmbrellaRecordingConfig(
+            folder: URL(fileURLWithPath: recordingFolderPath),
+            recordSystemAudio: recordSystemAudio,
+            recordMicrophone: includeMic
+        )
+        let showsAudio = config.recordSystemAudio || config.recordMicrophone
+
+        // Show chrome immediately so mouse-up feels instant; capture catches up underneath.
+        let overlay = UmbrellaRecordingOverlay(
+            selection: selection,
+            audioLevelMeter: screenRecorder.audioLevelMeter,
+            showsAudioVisualizer: showsAudio,
+            onStop: { [weak self] in self?.finishRecording() }
+        )
+        recordingOverlay = overlay
+        overlay.present()
+        UmbrellaRecordingSoundFeedback.playStart()
+        // isRecording marks UI/menu state; isStartingRecording stays true until the stream is live.
+        isRecording = true
+
         startRecordingTask?.cancel()
         startRecordingTask = Task { @MainActor in
             defer { self.startRecordingTask = nil }
 
-            var includeMic = false
-            if recordMicrophone {
-                includeMic = await ensureMicrophoneAccessAsync()
-                if !includeMic {
-                    logDebug("record begin: microphone unavailable, continuing without mic")
+            var resolvedConfig = config
+            if self.recordMicrophone, !resolvedConfig.recordMicrophone {
+                let granted = await self.ensureMicrophoneAccessAsync()
+                if granted {
+                    resolvedConfig = UmbrellaRecordingConfig(
+                        folder: config.folder,
+                        recordSystemAudio: config.recordSystemAudio,
+                        recordMicrophone: true
+                    )
+                } else {
+                    self.logDebug("record begin: microphone unavailable, continuing without mic")
                 }
             }
 
-            let config = UmbrellaRecordingConfig(
-                folder: URL(fileURLWithPath: recordingFolderPath),
-                recordSystemAudio: recordSystemAudio,
-                recordMicrophone: includeMic
-            )
-            logDebug("record begin: sysAudio=\(config.recordSystemAudio) mic=\(config.recordMicrophone)")
+            self.logDebug("record begin: sysAudio=\(resolvedConfig.recordSystemAudio) mic=\(resolvedConfig.recordMicrophone)")
 
             do {
-                let outputURL = try await screenRecorder.startRecording(selection: selection, config: config)
-                guard generation == recordingStartGeneration else {
-                    await screenRecorder.cancelRecording()
-                    isStartingRecording = false
+                let outputURL = try await self.screenRecorder.startRecording(selection: selection, config: resolvedConfig)
+                guard generation == self.recordingStartGeneration else {
+                    await self.screenRecorder.cancelRecording()
+                    self.recordingOverlay?.dismiss()
+                    self.recordingOverlay = nil
+                    self.isRecording = false
+                    self.isStartingRecording = false
                     return
                 }
-                isStartingRecording = false
-                isRecording = true
-                screenCaptureState = .allowed
-
-                let showsAudio = config.recordSystemAudio || config.recordMicrophone
-                let overlay = UmbrellaRecordingOverlay(
-                    selection: selection,
-                    audioLevelMeter: screenRecorder.audioLevelMeter,
-                    showsAudioVisualizer: showsAudio,
-                    onStop: { [weak self] in self?.finishRecording() },
-                    onCancel: { [weak self] in self?.cancelRecording() }
-                )
-                recordingOverlay = overlay
-                overlay.present()
-                UmbrellaRecordingSoundFeedback.playStart()
-                logDebug("record started: \(outputURL.lastPathComponent)")
+                self.isStartingRecording = false
+                self.screenCaptureState = .allowed
+                self.logDebug("record started: \(outputURL.lastPathComponent)")
             } catch {
-                isStartingRecording = false
-                logDebug("record start failed: \(error.localizedDescription)")
-                postNotification(title: "Umbrella Helper", body: "Could not start recording: \(error.localizedDescription)")
+                self.isRecording = false
+                self.isStartingRecording = false
+                self.recordingOverlay?.dismiss()
+                self.recordingOverlay = nil
+                self.logDebug("record start failed: \(error.localizedDescription)")
+                self.postNotification(title: "Umbrella Helper", body: "Could not start recording: \(error.localizedDescription)")
             }
         }
     }
@@ -1050,12 +1142,18 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         recordingStartGeneration += 1
         startRecordingTask?.cancel()
         startRecordingTask = nil
+        shareableContentPrewarmTask?.cancel()
+        shareableContentPrewarmTask = nil
         isStartingRecording = false
+        isRecording = false
+        recordingOverlay?.dismiss()
+        recordingOverlay = nil
         Task { await screenRecorder.cancelRecording() }
         logDebug("record: pending start cancelled")
     }
 
     private func finishRecording() {
+        // Stream may still be starting; treat stop as cancel until writer is live.
         if isStartingRecording {
             cancelPendingRecording()
             return
@@ -1091,15 +1189,6 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 postNotification(title: "Umbrella Helper", body: "Recording failed: \(error.localizedDescription)")
             }
         }
-    }
-
-    private func cancelRecording() {
-        guard isRecording else { return }
-        isRecording = false
-        recordingOverlay?.dismiss()
-        recordingOverlay = nil
-        Task { await screenRecorder.cancelRecording() }
-        logDebug("record: cancelled by user")
     }
 
     private func presentWindowSelector() {
@@ -1568,7 +1657,8 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
 @MainActor
 final class UmbrellaNeewerHUDBridge: NSObject {
     private let notificationName = Notification.Name("com.kevinwolfrom.neewerhud.update")
-    private var panel: UmbrellaNeewerHUDPanel?
+    private let state = UmbrellaNeewerHUDState()
+    private var panel: NSPanel?
     private var hideTimer: Timer?
 
     func start() {
@@ -1602,29 +1692,67 @@ final class UmbrellaNeewerHUDBridge: NSObject {
             }
         }()
 
-        if panel == nil {
-            panel = UmbrellaNeewerHUDPanel()
-        }
-        panel?.update(brightness: brightness, kelvin: kelvin, focus: focus)
+        state.brightness = Double(max(1, min(100, brightness))) / 100
+        state.kelvin = Double(max(2900, min(7000, kelvin)))
+        state.focus = focus
+        ensurePanel()
         positionPanel()
+
+        if let panel, !panel.isVisible {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                panel.animator().alphaValue = 1
+            }
+        } else {
+            panel?.orderFrontRegardless()
+        }
 
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: 1.4, repeats: false) { [weak self] _ in
-            self?.panel?.fadeOut {
-                self?.panel?.orderOut(nil)
-            }
+            guard let panel = self?.panel else { return }
+            NSAnimationContext.runAnimationGroup(
+                { context in
+                    context.duration = 0.18
+                    panel.animator().alphaValue = 0
+                },
+                completionHandler: { panel.orderOut(nil) }
+            )
         }
+    }
+
+    private func ensurePanel() {
+        guard panel == nil else { return }
+        let size = UmbrellaNeewerHUDView.panelSize
+        let host = NSHostingView(rootView: UmbrellaNeewerHUDView(state: state))
+        host.frame = NSRect(origin: .zero, size: size)
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.hasShadow = false
+        panel.contentView = host
+        self.panel = panel
     }
 
     private func positionPanel() {
         guard let panel else { return }
         let screen = MainActor.assumeIsolated { ActiveScreenTracker.presentationScreen(excluding: panel) }
         let visible = screen.visibleFrame
-        let origin = NSPoint(
-            x: visible.midX - panel.frame.width / 2,
-            y: visible.maxY - panel.frame.height - 18
+        let size = panel.frame.size
+        panel.setFrameOrigin(
+            NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2 + visible.height * 0.12)
         )
-        panel.setFrameOrigin(origin)
     }
 }
 
@@ -1632,124 +1760,126 @@ private enum UmbrellaNeewerHUDFocus {
     case brightness
     case temp
     case both
-}
 
-private final class UmbrellaNeewerHUDPanel: NSPanel {
-    private let brightnessBar = UmbrellaHUDLevelBarView(tint: .systemYellow)
-    private let tempBar = UmbrellaHUDLevelBarView(tint: .systemOrange)
-    private let brightnessValue = NSTextField(labelWithString: "80%")
-    private let tempValue = NSTextField(labelWithString: "5600K")
-
-    init() {
-        super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 108),
-            styleMask: [.nonactivatingPanel, .hudWindow],
-            backing: .buffered,
-            defer: false
-        )
-        level = .statusBar
-        isFloatingPanel = true
-        hidesOnDeactivate = false
-        hasShadow = true
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.94)
-        isOpaque = false
-
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 108))
-        contentView = root
-
-        let title = NSTextField(labelWithString: "Neewer GL1")
-        title.font = .systemFont(ofSize: 12, weight: .semibold)
-        title.textColor = .secondaryLabelColor
-        title.frame = NSRect(x: 16, y: 78, width: 268, height: 16)
-        root.addSubview(title)
-
-        let brightnessLabel = NSTextField(labelWithString: "Brightness")
-        brightnessLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        brightnessLabel.frame = NSRect(x: 16, y: 54, width: 90, height: 14)
-        root.addSubview(brightnessLabel)
-        brightnessValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        brightnessValue.alignment = .right
-        brightnessValue.frame = NSRect(x: 212, y: 54, width: 72, height: 14)
-        root.addSubview(brightnessValue)
-        brightnessBar.frame = NSRect(x: 16, y: 42, width: 268, height: 8)
-        root.addSubview(brightnessBar)
-
-        let tempLabel = NSTextField(labelWithString: "Color")
-        tempLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        tempLabel.frame = NSRect(x: 16, y: 22, width: 90, height: 14)
-        root.addSubview(tempLabel)
-        tempValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        tempValue.alignment = .right
-        tempValue.frame = NSRect(x: 212, y: 22, width: 72, height: 14)
-        root.addSubview(tempValue)
-        tempBar.frame = NSRect(x: 16, y: 10, width: 268, height: 8)
-        root.addSubview(tempBar)
-    }
-
-    func update(brightness: Int, kelvin: Int, focus: UmbrellaNeewerHUDFocus) {
-        let clampedBri = max(1, min(100, brightness))
-        let clampedKelvin = max(2900, min(7000, kelvin))
-        brightnessValue.stringValue = "\(clampedBri)%"
-        tempValue.stringValue = "\(clampedKelvin)K"
-        brightnessBar.level = CGFloat(clampedBri) / 100
-        tempBar.level = CGFloat(clampedKelvin - 2900) / CGFloat(7000 - 2900)
-        brightnessBar.emphasis = (focus == .brightness || focus == .both) ? 1 : 0.35
-        tempBar.emphasis = (focus == .temp || focus == .both) ? 1 : 0.35
-        brightnessBar.needsDisplay = true
-        tempBar.needsDisplay = true
-
-        if !isVisible {
-            alphaValue = 0
-            orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.12
-                animator().alphaValue = 1
-            }
+    var title: String {
+        switch self {
+        case .brightness: return "Brightness"
+        case .temp: return "Warmth"
+        case .both: return "Neewer"
         }
     }
-
-    func fadeOut(completion: @escaping () -> Void) {
-        NSAnimationContext.runAnimationGroup(
-            { context in
-                context.duration = 0.18
-                animator().alphaValue = 0
-            },
-            completionHandler: completion
-        )
-    }
 }
 
-private final class UmbrellaHUDLevelBarView: NSView {
-    var level: CGFloat = 0
-    var emphasis: CGFloat = 1
-    let tint: NSColor
+private final class UmbrellaNeewerHUDState: ObservableObject {
+    @Published var brightness: Double = 0.8
+    @Published var kelvin: Double = 5600
+    @Published var focus: UmbrellaNeewerHUDFocus = .both
+}
 
-    init(tint: NSColor) {
-        self.tint = tint
-        super.init(frame: .zero)
+private struct UmbrellaNeewerHUDView: View {
+    static let panelSize = NSSize(width: 460, height: 132)
+    private static let trackWidth: CGFloat = 300
+    private static let contentWidth: CGFloat = 420
+    private static let minKelvin = 2900.0
+    private static let maxKelvin = 7000.0
+
+    @ObservedObject var state: UmbrellaNeewerHUDState
+
+    private var warmthProgress: Double {
+        (Self.maxKelvin - state.kelvin) / (Self.maxKelvin - Self.minKelvin)
     }
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(state.focus.title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            row(
+                icon: "sun.max.fill",
+                iconColor: .yellow,
+                progress: state.brightness,
+                label: "\(Int((state.brightness * 100).rounded()))%",
+                trackFill: LinearGradient(
+                    colors: [.white.opacity(0.95), .white.opacity(0.7)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                emphasized: state.focus == .brightness || state.focus == .both
+            )
+            row(
+                icon: "thermometer.medium",
+                iconColor: .orange,
+                progress: warmthProgress,
+                label: "\(Int(state.kelvin.rounded()))K",
+                trackFill: LinearGradient(
+                    colors: [.blue, .cyan, .yellow, .orange, .red],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                emphasized: state.focus == .temp || state.focus == .both
+            )
+        }
+        .frame(width: Self.contentWidth)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(width: Self.panelSize.width, height: Self.panelSize.height)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: NSColor(white: 0.12, alpha: 0.88)))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+        }
+        .animation(.easeInOut(duration: 0.2), value: state.brightness)
+        .animation(.easeInOut(duration: 0.2), value: state.kelvin)
+        .animation(.easeInOut(duration: 0.2), value: state.focus)
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        let track = bounds.insetBy(dx: 0, dy: 1)
-        guard track.width > 0, track.height > 0 else { return }
+    private func row(
+        icon: String,
+        iconColor: Color,
+        progress: Double,
+        label: String,
+        trackFill: LinearGradient,
+        emphasized: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 20)
 
-        let trackPath = NSBezierPath(roundedRect: track, xRadius: 4, yRadius: 4)
-        NSColor.quaternaryLabelColor.withAlphaComponent(0.55).setFill()
-        trackPath.fill()
+            track(progress: progress, fill: trackFill)
 
-        let clamped = max(0, min(1, level))
-        let fillRect = NSRect(x: track.minX, y: track.minY, width: track.width * clamped, height: track.height)
-        guard fillRect.width > 0.5 else { return }
-        NSGraphicsContext.saveGraphicsState()
-        trackPath.addClip()
-        tint.withAlphaComponent(0.35 + 0.65 * emphasis).setFill()
-        fillRect.fill()
-        NSGraphicsContext.restoreGraphicsState()
+            Text(label)
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(width: 64, alignment: .trailing)
+        }
+        .frame(width: Self.contentWidth)
+        .opacity(emphasized ? 1 : 0.38)
+    }
+
+    private func track(progress: Double, fill: LinearGradient) -> some View {
+        let clamped = min(1, max(0, progress))
+        return ZStack(alignment: .leading) {
+            Capsule().fill(Color.white.opacity(0.18))
+            Capsule()
+                .fill(fill)
+                .frame(width: max(4, Self.trackWidth * clamped))
+            if clamped > 0.04 && clamped < 0.96 {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
+                    .offset(x: Self.trackWidth * clamped - 3)
+            }
+        }
+        .frame(width: Self.trackWidth, height: 8)
     }
 }
 
@@ -1842,7 +1972,12 @@ enum UmbrellaScreenCoordinateSpace {
     static func captureImage(fromAppKitSelection selection: NSRect) -> CGImage? {
         let captureRect = cgWindowBounds(fromAppKit: selection)
         guard captureRect.width > 0, captureRect.height > 0 else { return nil }
-        return CGWindowListCreateImage(captureRect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution)
+        return CGWindowListCreateImage(
+            captureRect,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
+            [.bestResolution, .boundsIgnoreFraming]
+        )
     }
 
     @discardableResult
@@ -2020,6 +2155,8 @@ final class UmbrellaAreaSelectionOverlay {
     private let allowsTextCopy: Bool
     private let initialTextCopy: Bool
     private let textCopyKeyCode: UInt16
+    private let completionDelay: TimeInterval
+    private let selectionStrokeColor: NSColor
     private let onComplete: (CGRect, Bool) -> Void
     private let onCancel: () -> Void
 
@@ -2027,12 +2164,16 @@ final class UmbrellaAreaSelectionOverlay {
         allowsTextCopy: Bool = false,
         initialTextCopy: Bool = false,
         textCopyKeyCode: UInt16 = UInt16(kVK_Tab),
+        completionDelay: TimeInterval = 0.12,
+        selectionStrokeColor: NSColor = .systemCyan,
         onComplete: @escaping (CGRect, Bool) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.allowsTextCopy = allowsTextCopy
         self.initialTextCopy = initialTextCopy
         self.textCopyKeyCode = textCopyKeyCode
+        self.completionDelay = completionDelay
+        self.selectionStrokeColor = selectionStrokeColor
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
@@ -2171,6 +2312,7 @@ final class UmbrellaAreaSelectionOverlay {
         for window in overlayWindows {
             window.selectionRect = currentSelection
             window.showsTextCopyIndicator = allowsTextCopy && textCopyModeActive
+            window.selectionStrokeColor = selectionStrokeColor
             window.contentView?.needsDisplay = true
         }
     }
@@ -2192,17 +2334,29 @@ final class UmbrellaAreaSelectionOverlay {
         let copyText = !cancelled && allowsTextCopy && textCopyRequested
         textCopyModeActive = false
         textCopyRequested = false
-        overlayWindows.forEach { $0.orderOut(nil) }
+        for window in overlayWindows {
+            window.alphaValue = 0
+            window.orderOut(nil)
+            window.contentView?.needsDisplay = true
+        }
         overlayWindows.removeAll()
 
         let completion = onComplete
         let cancellation = onCancel
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        let delay = completionDelay
+        let invoke = {
             if cancelled {
                 cancellation()
             } else {
                 completion(selection, copyText)
             }
+        }
+        // Screenshots keep a short delay so overlay pixels are gone before capture.
+        // Recording uses completionDelay=0 (overlays are sharingType=.none).
+        if delay <= 0 {
+            invoke()
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: invoke)
         }
     }
 
@@ -2218,6 +2372,7 @@ final class UmbrellaAreaSelectionOverlay {
     fileprivate final class OverlayWindow: NSWindow {
         var selectionRect: NSRect = .zero
         var showsTextCopyIndicator = false
+        var selectionStrokeColor: NSColor = .systemCyan
         let targetScreen: NSScreen
         private weak var selector: UmbrellaAreaSelectionOverlay?
 
@@ -2231,6 +2386,8 @@ final class UmbrellaAreaSelectionOverlay {
             backgroundColor = .clear
             hasShadow = false
             ignoresMouseEvents = false
+            // Keep selection chrome out of CGWindowList / screencapture bitmaps.
+            sharingType = .none
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             acceptsMouseMovedEvents = true
             contentView = OverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), selector: selector)
@@ -2300,13 +2457,17 @@ final class UmbrellaAreaSelectionOverlay {
 
             guard let visible = visibleSelection else { return }
 
-            let path = NSBezierPath(rect: visible)
-            path.lineWidth = 2.5
+            // Stroke fully outside the selection so it cannot bleed into the captured region.
+            let lineWidth: CGFloat = 2.5
+            let borderRect = visible.insetBy(dx: -(lineWidth / 2 + 1), dy: -(lineWidth / 2 + 1))
+            let path = NSBezierPath(rect: borderRect)
+            path.lineWidth = lineWidth
             effectiveAppearance.performAsCurrentDrawingAppearance {
+                // cyan = screenshot, red = video, green = text copy
                 if window.showsTextCopyIndicator {
                     NSColor.systemGreen.setStroke()
                 } else {
-                    NSColor.systemCyan.setStroke()
+                    window.selectionStrokeColor.setStroke()
                 }
                 path.stroke()
             }
@@ -2450,12 +2611,16 @@ final class UmbrellaWindowSelectionOverlay {
         }
         NSCursor.pop()
         highlightedWindow = .zero
-        overlayWindows.forEach { $0.orderOut(nil) }
+        for window in overlayWindows {
+            window.alphaValue = 0
+            window.orderOut(nil)
+            window.contentView?.needsDisplay = true
+        }
         overlayWindows.removeAll()
 
         let completion = onComplete
         let cancellation = onCancel
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             if cancelled {
                 cancellation()
             } else {
@@ -2479,6 +2644,8 @@ final class UmbrellaWindowSelectionOverlay {
             backgroundColor = .clear
             hasShadow = false
             ignoresMouseEvents = false
+            // Keep selection chrome out of CGWindowList / screencapture bitmaps.
+            sharingType = .none
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             acceptsMouseMovedEvents = true
             contentView = WindowOverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), selector: selector)
@@ -2548,8 +2715,11 @@ final class UmbrellaWindowSelectionOverlay {
 
             guard let visible = visibleHighlight else { return }
 
-            let path = NSBezierPath(rect: visible)
-            path.lineWidth = 2.5
+            // Stroke fully outside the highlight so it cannot bleed into the captured region.
+            let lineWidth: CGFloat = 2.5
+            let borderRect = visible.insetBy(dx: -(lineWidth / 2 + 1), dy: -(lineWidth / 2 + 1))
+            let path = NSBezierPath(rect: borderRect)
+            path.lineWidth = lineWidth
             effectiveAppearance.performAsCurrentDrawingAppearance {
                 NSColor.systemOrange.setStroke()
                 path.stroke()
@@ -2563,10 +2733,10 @@ final class UmbrellaRecordingOverlay {
     private var controlPanel: ControlPanel?
     private var pulseTimer: Timer?
     private var keyEventMonitor: Any?
+    private var globalKeyEventMonitor: Any?
     private var pulseOn = false
     private let selection: NSRect
     private let onStop: () -> Void
-    private let onCancel: () -> Void
     private let audioLevelMeter: UmbrellaAudioLevelMeter?
     private let showsAudioVisualizer: Bool
 
@@ -2574,14 +2744,12 @@ final class UmbrellaRecordingOverlay {
         selection: NSRect,
         audioLevelMeter: UmbrellaAudioLevelMeter? = nil,
         showsAudioVisualizer: Bool = false,
-        onStop: @escaping () -> Void,
-        onCancel: @escaping () -> Void
+        onStop: @escaping () -> Void
     ) {
         self.selection = selection
         self.audioLevelMeter = audioLevelMeter
         self.showsAudioVisualizer = showsAudioVisualizer
         self.onStop = onStop
-        self.onCancel = onCancel
     }
 
     func present() {
@@ -2609,14 +2777,22 @@ final class UmbrellaRecordingOverlay {
             self.controlPanel?.setRecordingPulse(self.pulseOn)
         }
 
-        keyEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Escape ends (stops and saves) the recording, matching the Stop control.
+        // Local + global monitors so it works whether or not this app is focused.
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.keyCode == 53 else { return event }
+            DispatchQueue.main.async { self.onStop() }
+            return nil
+        }
+        globalKeyEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.keyCode == 53 else { return }
-            DispatchQueue.main.async { self?.onCancel() }
+            DispatchQueue.main.async { self?.onStop() }
         }
     }
 
     func dismiss() {
         if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor); self.keyEventMonitor = nil }
+        if let globalKeyEventMonitor { NSEvent.removeMonitor(globalKeyEventMonitor); self.globalKeyEventMonitor = nil }
         pulseTimer?.invalidate()
         pulseTimer = nil
         borderWindows.forEach { $0.orderOut(nil) }
@@ -2637,6 +2813,8 @@ final class UmbrellaRecordingOverlay {
             isOpaque = false
             backgroundColor = .clear
             ignoresMouseEvents = true
+            // Keep recording chrome out of CGWindowList / screencapture bitmaps.
+            sharingType = .none
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             contentView = BorderView(frame: NSRect(origin: .zero, size: screen.frame.size), selection: selection)
         }
@@ -2760,6 +2938,8 @@ final class UmbrellaRecordingOverlay {
             backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.92)
             isOpaque = false
             hasShadow = true
+            // Keep recording controls out of CGWindowList / screencapture bitmaps.
+            sharingType = .none
             collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
             let container = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: panelHeight))
@@ -2875,9 +3055,34 @@ final class UmbrellaScreenRecorder: NSObject, SCStreamDelegate {
     private var microphoneCapture: MicrophoneCapture?
     private var outputURL: URL?
     private var frameCount = 0
+    private var cachedShareableContent: SCShareableContent?
+    private var cachedShareableContentAt: Date?
+
+    /// Warm ScreenCaptureKit while the user is still selecting an area.
+    func prewarmShareableContent() async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            cachedShareableContent = content
+            cachedShareableContentAt = Date()
+        } catch {
+            // Best-effort; startRecording will fetch again.
+        }
+    }
+
+    private func shareableContent(maxAge: TimeInterval = 8) async throws -> SCShareableContent {
+        if let cached = cachedShareableContent,
+           let at = cachedShareableContentAt,
+           Date().timeIntervalSince(at) < maxAge {
+            return cached
+        }
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        cachedShareableContent = content
+        cachedShareableContentAt = Date()
+        return content
+    }
 
     func startRecording(selection: CGRect, config: UmbrellaRecordingConfig) async throws -> URL {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content = try await shareableContent()
         guard let match = displayMatch(for: selection, displays: content.displays) else {
             throw UmbrellaRecorderError.noDisplay
         }

@@ -92,8 +92,8 @@ let repoRoot = URL(fileURLWithPath: CommandLine.arguments[0])
     .deletingLastPathComponent()
 
 let brandingDir = repoRoot.appendingPathComponent("branding")
-let logoMarkDir = repoRoot.appendingPathComponent("CursorPopup/Resources/Assets.xcassets/LogoMark.imageset")
-let appIconDir = repoRoot.appendingPathComponent("CursorPopup/Resources/Assets.xcassets/AppIcon.appiconset")
+let logoMarkDir = repoRoot.appendingPathComponent("UmbrellaHelper/Resources/Assets.xcassets/LogoMark.imageset")
+let appIconDir = repoRoot.appendingPathComponent("UmbrellaHelper/Resources/Assets.xcassets/AppIcon.appiconset")
 
 RenderUmbrella.writePNG(at: brandingDir.appendingPathComponent("icon-1024.png").path, size: 1024)
 
