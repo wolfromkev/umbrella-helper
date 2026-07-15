@@ -11,6 +11,7 @@
 		B10000000000000000000022 /* AttachmentThumbnailStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000024 /* AttachmentThumbnailStrip.swift */; };
 		B10000000000000000000024 /* PopupChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000026 /* PopupChrome.swift */; };
 		B10000000000000000000025 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000027 /* SettingsView.swift */; };
+		B10000000000000000000035 /* MenuBarControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000037 /* MenuBarControlsView.swift */; };
 		B10000000000000000000026 /* SettingsPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000028 /* SettingsPanelController.swift */; };
 		B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000025 /* ClickOutsideDismissal.swift */; };
 		B10000000000000000000001 /* UmbrellaHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* UmbrellaHelperApp.swift */; };
@@ -49,6 +50,7 @@
 		F10000000000000000000024 /* AttachmentThumbnailStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentThumbnailStrip.swift; sourceTree = "<group>"; };
 		F10000000000000000000028 /* SettingsPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanelController.swift; sourceTree = "<group>"; };
 		F10000000000000000000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000037 /* MenuBarControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarControlsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000026 /* PopupChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupChrome.swift; sourceTree = "<group>"; };
 		F10000000000000000000030 /* HotKeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyRecorderView.swift; sourceTree = "<group>"; };
 		F10000000000000000000036 /* SystemPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPermissions.swift; sourceTree = "<group>"; };
@@ -109,6 +111,7 @@
 				F10000000000000000000024 /* AttachmentThumbnailStrip.swift */,
 				F10000000000000000000026 /* PopupChrome.swift */,
 				F10000000000000000000027 /* SettingsView.swift */,
+				F10000000000000000000037 /* MenuBarControlsView.swift */,
 				F10000000000000000000030 /* HotKeyRecorderView.swift */,
 				F10000000000000000000034 /* NotionTaskContentView.swift */,
 			);
@@ -233,6 +236,7 @@
 				B10000000000000000000027 /* ActiveScreenTracker.swift in Sources */,
 				B10000000000000000000024 /* PopupChrome.swift in Sources */,
 				B10000000000000000000025 /* SettingsView.swift in Sources */,
+				B10000000000000000000035 /* MenuBarControlsView.swift in Sources */,
 				B10000000000000000000028 /* HotKeyRecorderView.swift in Sources */,
 				B10000000000000000000026 /* SettingsPanelController.swift in Sources */,
 				B10000000000000000000029 /* NotionTaskPanelController.swift in Sources */,

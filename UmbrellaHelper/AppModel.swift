@@ -4,6 +4,7 @@ import Carbon.HIToolbox
 import Combine
 import CoreGraphics
 import CoreMedia
+import Darwin
 import ScreenCaptureKit
 import SwiftUI
 import Vision
@@ -40,9 +41,11 @@ final class AppModel: ObservableObject {
     private let filmModeHotKey = GlobalHotKey(registrationID: 14)
     private var sunPresetHotKeys: [String: GlobalHotKey] = [:]
     private var nextSunPresetHotKeyID: UInt32 = 200
+    private var neewerPresetHotKeys: [String: GlobalHotKey] = [:]
+    private var nextNeewerPresetHotKeyID: UInt32 = 300
     let brightnessFeature = UmbrellaBrightnessFeature()
     let simpleSnipFeature = UmbrellaSimpleSnipFeature()
-    let neewerHUDBridge = UmbrellaNeewerHUDBridge()
+    let neewerLightFeature = UmbrellaNeewerLightFeature()
 
     var notionTaskHasKeyboardFocus: Bool {
         notionTaskPanelController.hasKeyboardFocus
@@ -55,7 +58,7 @@ final class AppModel: ObservableObject {
         settings.bootstrapNotionConfiguration()
         brightnessFeature.start()
         simpleSnipFeature.start()
-        neewerHUDBridge.start()
+        neewerLightFeature.start()
         reloadHotKeys()
 
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
@@ -88,11 +91,13 @@ final class AppModel: ObservableObject {
         filmModeHotKey.unregister()
         sunPresetHotKeys.values.forEach { $0.unregister() }
         sunPresetHotKeys.removeAll()
+        neewerPresetHotKeys.values.forEach { $0.unregister() }
+        neewerPresetHotKeys.removeAll()
         settingsPanelController.closePanel()
         notionTaskPanelController.closePanel()
         brightnessFeature.stop()
         simpleSnipFeature.stop()
-        neewerHUDBridge.stop()
+        neewerLightFeature.stop()
     }
 
     func reloadHotKeys() {
@@ -134,6 +139,7 @@ final class AppModel: ObservableObject {
             filmModeHotKey.unregister()
         }
         reloadSunPresetHotKeys()
+        reloadNeewerPresetHotKeys()
     }
 
     func reloadSunPresetHotKeys() {
@@ -153,6 +159,26 @@ final class AppModel: ObservableObject {
                 }
             }
             sunPresetHotKeys[preset.id] = hotKey
+        }
+    }
+
+    func reloadNeewerPresetHotKeys() {
+        neewerPresetHotKeys.values.forEach { $0.unregister() }
+        neewerPresetHotKeys.removeAll()
+        nextNeewerPresetHotKeyID = 300
+
+        for preset in neewerLightFeature.presets {
+            guard let binding = settings.neewerPresetHotKeys[preset.id] else { continue }
+            let id = nextNeewerPresetHotKeyID
+            nextNeewerPresetHotKeyID += 1
+            let hotKey = GlobalHotKey(registrationID: id)
+            hotKey.register(hotKeyID: binding) { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.neewerLightFeature.applyPreset(id: preset.id)
+                }
+            }
+            neewerPresetHotKeys[preset.id] = hotKey
         }
     }
 
@@ -293,13 +319,76 @@ struct UmbrellaSunPreset: Codable, Equatable, Identifiable {
     var brightness: Float
     var colorTemp: Int
     var isDarkroom: Bool
+    var isFilmMode: Bool
 
-    init(id: String = UUID().uuidString, name: String, brightness: Float, colorTemp: Int, isDarkroom: Bool = false) {
+    init(
+        id: String = UUID().uuidString,
+        name: String,
+        brightness: Float,
+        colorTemp: Int,
+        isDarkroom: Bool = false,
+        isFilmMode: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.brightness = brightness
         self.colorTemp = colorTemp
         self.isDarkroom = isDarkroom
+        self.isFilmMode = isFilmMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        brightness = try container.decode(Float.self, forKey: .brightness)
+        colorTemp = try container.decode(Int.self, forKey: .colorTemp)
+        isDarkroom = try container.decodeIfPresent(Bool.self, forKey: .isDarkroom) ?? false
+        isFilmMode = try container.decodeIfPresent(Bool.self, forKey: .isFilmMode) ?? false
+    }
+}
+
+enum UmbrellaNeewerPowerOnMode: String, Codable, CaseIterable, Identifiable {
+    case lastValue
+    case defaultValue
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .lastValue: return "Last value"
+        case .defaultValue: return "Default value"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .lastValue:
+            return "After a Mac restart, the first time you turn the light on it restores the last brightness and warmth you used."
+        case .defaultValue:
+            return "After a Mac restart, the first time you turn the light on it applies your default brightness and warmth."
+        }
+    }
+}
+
+struct UmbrellaNeewerPreset: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    /// 1...100
+    var brightness: Int
+    /// Kelvin, e.g. 5600
+    var kelvin: Int
+
+    init(id: String = UUID().uuidString, name: String, brightness: Int, kelvin: Int) {
+        self.id = id
+        self.name = name
+        self.brightness = max(1, min(100, brightness))
+        self.kelvin = max(2900, min(7000, kelvin))
+    }
+
+    /// NeewerLite temperature units (29...70).
+    var temperature: Int {
+        max(29, min(70, Int((Double(kelvin) / 100.0).rounded())))
     }
 }
 
@@ -417,180 +506,6 @@ private enum UmbrellaBlueLightManager {
     }
 }
 
-final class UmbrellaBrightnessOverlayState: ObservableObject {
-    @Published var brightness: Double = 1
-    @Published var colorTemp: Double = 6500
-    @Published var isDarkroom: Bool = false
-}
-
-struct UmbrellaBrightnessOverlayView: View {
-    static let panelSize = NSSize(width: 460, height: 108)
-    private static let trackWidth: CGFloat = 300
-    private static let contentWidth: CGFloat = 420
-
-    @ObservedObject var state: UmbrellaBrightnessOverlayState
-
-    private var warmthProgress: Double {
-        guard !state.isDarkroom else { return 1 }
-        return (6500 - state.colorTemp) / (6500 - 1200)
-    }
-
-    var body: some View {
-        VStack(spacing: 14) {
-            row(
-                icon: "sun.max.fill",
-                iconColor: .yellow,
-                progress: state.brightness,
-                label: "\(Int((state.brightness * 100).rounded()))%",
-                trackFill: LinearGradient(
-                    colors: [.white.opacity(0.95), .white.opacity(0.7)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            row(
-                icon: state.isDarkroom ? "eye.slash.fill" : "thermometer.medium",
-                iconColor: state.isDarkroom ? .red : .orange,
-                progress: warmthProgress,
-                label: state.isDarkroom ? "Darkroom" : "\(Int(state.colorTemp.rounded()))K",
-                trackFill: LinearGradient(
-                    colors: state.isDarkroom
-                        ? [.red.opacity(0.9), .red.opacity(0.5)]
-                        : [.blue, .cyan, .yellow, .orange, .red],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-        }
-        .frame(width: Self.contentWidth)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .frame(width: Self.panelSize.width, height: Self.panelSize.height)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: NSColor(white: 0.12, alpha: 0.88)))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
-        }
-        .animation(.easeInOut(duration: 0.25), value: state.brightness)
-        .animation(.easeInOut(duration: 0.25), value: state.colorTemp)
-        .animation(.easeInOut(duration: 0.25), value: state.isDarkroom)
-    }
-
-    private func row(
-        icon: String,
-        iconColor: Color,
-        progress: Double,
-        label: String,
-        trackFill: LinearGradient
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(iconColor)
-                .frame(width: 20)
-
-            track(progress: progress, fill: trackFill)
-
-            Text(label)
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 64, alignment: .trailing)
-        }
-        .frame(width: Self.contentWidth)
-    }
-
-    private func track(progress: Double, fill: LinearGradient) -> some View {
-        let clamped = min(1, max(0, progress))
-        return ZStack(alignment: .leading) {
-            Capsule().fill(Color.white.opacity(0.18))
-            Capsule()
-                .fill(fill)
-                .frame(width: max(4, Self.trackWidth * clamped))
-            if clamped > 0.04 && clamped < 0.96 {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
-                    .offset(x: Self.trackWidth * clamped - 3)
-            }
-        }
-        .frame(width: Self.trackWidth, height: 8)
-    }
-}
-
-final class UmbrellaBrightnessOverlayController {
-    static let shared = UmbrellaBrightnessOverlayController()
-
-    private let state = UmbrellaBrightnessOverlayState()
-    private var panel: NSPanel?
-    private var hideTimer: Timer?
-
-    private init() {}
-
-    func show(brightness: Float, colorTemp: Int, isDarkroom: Bool) {
-        DispatchQueue.main.async {
-            self.state.brightness = Double(brightness)
-            self.state.colorTemp = Double(colorTemp)
-            self.state.isDarkroom = isDarkroom
-            self.ensurePanel()
-            self.positionPanel()
-            self.panel?.alphaValue = 1
-            self.panel?.orderFrontRegardless()
-            self.resetHideTimer()
-        }
-    }
-
-    private func ensurePanel() {
-        guard panel == nil else { return }
-        let size = UmbrellaBrightnessOverlayView.panelSize
-        let host = NSHostingView(rootView: UmbrellaBrightnessOverlayView(state: state))
-        host.frame = NSRect(origin: .zero, size: size)
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.ignoresMouseEvents = true
-        panel.contentView = host
-        self.panel = panel
-    }
-
-    private func positionPanel() {
-        guard let panel else { return }
-        let screen = MainActor.assumeIsolated { ActiveScreenTracker.presentationScreen(excluding: panel) }
-        let frame = screen.visibleFrame
-        let size = panel.frame.size
-        panel.setFrameOrigin(
-            NSPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2 + frame.height * 0.12)
-        )
-    }
-
-    private func resetHideTimer() {
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            guard let panel = self?.panel else { return }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                panel.animator().alphaValue = 0
-            } completionHandler: {
-                panel.orderOut(nil)
-                panel.alphaValue = 1
-            }
-        }
-    }
-}
-
 @MainActor
 final class UmbrellaBrightnessFeature: ObservableObject {
     static let brightnessStep: Float = 0.05
@@ -610,13 +525,17 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     @Published var dayPresetID: String
     @Published var nightPresetID: String
     @Published var locationName: String?
+    /// Up to 3 preset IDs shown in the menu bar Screen section.
+    @Published var menuBarFavoriteIDs: [String]
+
+    static let maxMenuBarFavorites = 3
 
     private var keepAwakeActivity: NSObjectProtocol?
     private var timer: Timer?
     private var screenChangeObserver: NSObjectProtocol?
     private let defaults = UserDefaults.standard
     private let presetKey = "umbrella.sunscreen.presets"
-    private let overlayController = UmbrellaBrightnessOverlayController.shared
+    private let menuBarFavoritesKey = "umbrella.sunscreen.menuBarFavoriteIDs"
 
     init() {
         let loadedPresets = Self.loadPresets(from: defaults, key: presetKey)
@@ -638,6 +557,21 @@ final class UmbrellaBrightnessFeature: ObservableObject {
             ?? loadedPresets.dropFirst().first?.id
             ?? loadedPresets.first?.id
             ?? ""
+        let storedFavorites = defaults.stringArray(forKey: menuBarFavoritesKey) ?? []
+        let validFavoriteIDs = storedFavorites.filter { id in loadedPresets.contains(where: { $0.id == id }) }
+        if validFavoriteIDs.isEmpty {
+            menuBarFavoriteIDs = Array(loadedPresets.prefix(Self.maxMenuBarFavorites).map(\.id))
+        } else {
+            menuBarFavoriteIDs = Array(validFavoriteIDs.prefix(Self.maxMenuBarFavorites))
+        }
+        defaults.set(menuBarFavoriteIDs, forKey: menuBarFavoritesKey)
+        if let data = try? JSONEncoder().encode(presets) {
+            defaults.set(data, forKey: presetKey)
+        }
+    }
+
+    var menuBarFavoritePresets: [UmbrellaSunPreset] {
+        menuBarFavoriteIDs.compactMap { id in presets.first(where: { $0.id == id }) }
     }
 
     func start() {
@@ -678,7 +612,6 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         brightness = max(0.05, min(1, value))
         isDarkroom = false
         apply()
-        showAdjustmentOverlay()
     }
 
     func adjustBrightness(by delta: Float) {
@@ -690,7 +623,6 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         colorTemp = max(1200, min(6500, value))
         isDarkroom = false
         apply()
-        showAdjustmentOverlay()
     }
 
     func adjustColorTemp(by delta: Int) {
@@ -701,7 +633,6 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         if enabled { isAutoMode = false }
         isDarkroom = enabled
         apply()
-        showAdjustmentOverlay()
     }
 
     func setAutoMode(_ enabled: Bool) {
@@ -754,7 +685,8 @@ final class UmbrellaBrightnessFeature: ObservableObject {
             name: name.isEmpty ? UmbrellaBlueLightManager.warmthLabel(for: colorTemp) : name,
             brightness: brightness,
             colorTemp: colorTemp,
-            isDarkroom: isDarkroom
+            isDarkroom: isDarkroom,
+            isFilmMode: isFilmModeEnabled
         )
         presets.append(preset)
         if dayPresetID.isEmpty { dayPresetID = preset.id }
@@ -770,9 +702,28 @@ final class UmbrellaBrightnessFeature: ObservableObject {
 
     func removePreset(_ presetID: String) {
         presets.removeAll(where: { $0.id == presetID })
+        menuBarFavoriteIDs.removeAll { $0 == presetID }
         if dayPresetID == presetID { dayPresetID = presets.first?.id ?? "" }
         if nightPresetID == presetID { nightPresetID = presets.dropFirst().first?.id ?? presets.first?.id ?? "" }
         save()
+    }
+
+    func isMenuBarFavorite(_ presetID: String) -> Bool {
+        menuBarFavoriteIDs.contains(presetID)
+    }
+
+    @discardableResult
+    func toggleMenuBarFavorite(_ presetID: String) -> Bool {
+        guard presets.contains(where: { $0.id == presetID }) else { return false }
+        if let index = menuBarFavoriteIDs.firstIndex(of: presetID) {
+            menuBarFavoriteIDs.remove(at: index)
+            save()
+            return true
+        }
+        guard menuBarFavoriteIDs.count < Self.maxMenuBarFavorites else { return false }
+        menuBarFavoriteIDs.append(presetID)
+        save()
+        return true
     }
 
     func applyPreset(id: String) {
@@ -780,9 +731,9 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         brightness = preset.brightness
         colorTemp = preset.colorTemp
         isDarkroom = preset.isDarkroom
+        isFilmModeEnabled = preset.isFilmMode
         isAutoMode = false
         apply()
-        showAdjustmentOverlay()
     }
 
     func refreshAutoStateIfNeeded() {
@@ -849,10 +800,6 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         save()
     }
 
-    private func showAdjustmentOverlay() {
-        overlayController.show(brightness: brightness, colorTemp: colorTemp, isDarkroom: isDarkroom)
-    }
-
     private func applyKeepAwake() {
         if isKeepAwakeEnabled {
             guard keepAwakeActivity == nil else { return }
@@ -884,21 +831,679 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         defaults.set(isFilmModeEnabled, forKey: "umbrella.sunscreen.filmMode")
         defaults.set(dayPresetID, forKey: "umbrella.sunscreen.dayPresetID")
         defaults.set(nightPresetID, forKey: "umbrella.sunscreen.nightPresetID")
+        defaults.set(menuBarFavoriteIDs, forKey: menuBarFavoritesKey)
         if let data = try? JSONEncoder().encode(presets) {
             defaults.set(data, forKey: presetKey)
         }
     }
 
     private static func loadPresets(from defaults: UserDefaults, key: String) -> [UmbrellaSunPreset] {
+        var loaded: [UmbrellaSunPreset]
         if let data = defaults.data(forKey: key),
-           let loaded = try? JSONDecoder().decode([UmbrellaSunPreset].self, from: data),
-           !loaded.isEmpty {
-            return loaded
+           let decoded = try? JSONDecoder().decode([UmbrellaSunPreset].self, from: data),
+           !decoded.isEmpty {
+            loaded = decoded
+        } else {
+            loaded = defaultPresets()
         }
-        return [
+        if !loaded.contains(where: { $0.isFilmMode || $0.name.caseInsensitiveCompare("Film Mode") == .orderedSame }) {
+            loaded.append(
+                UmbrellaSunPreset(
+                    name: "Film Mode",
+                    brightness: 1.0,
+                    colorTemp: 6500,
+                    isDarkroom: false,
+                    isFilmMode: true
+                )
+            )
+        }
+        return loaded
+    }
+
+    private static func defaultPresets() -> [UmbrellaSunPreset] {
+        [
             UmbrellaSunPreset(name: "Daylight", brightness: 1.0, colorTemp: 6500),
             UmbrellaSunPreset(name: "Incandescent", brightness: 0.45, colorTemp: 2700),
             UmbrellaSunPreset(name: "Candle", brightness: 0.35, colorTemp: 1900),
+            UmbrellaSunPreset(
+                name: "Film Mode",
+                brightness: 1.0,
+                colorTemp: 6500,
+                isDarkroom: false,
+                isFilmMode: true
+            ),
+        ]
+    }
+}
+
+@MainActor
+final class UmbrellaNeewerLightFeature: ObservableObject {
+    static let minBrightness = 1
+    static let maxBrightness = 100
+    static let minKelvin = 2900
+    static let maxKelvin = 7000
+    static let kelvinStep = 100
+
+    @Published var powerOnMode: UmbrellaNeewerPowerOnMode
+    @Published var brightness: Int
+    @Published var kelvin: Int
+    @Published var defaultBrightness: Int
+    @Published var defaultKelvin: Int
+    @Published var presets: [UmbrellaNeewerPreset]
+    @Published var statusMessage: String?
+    @Published var isBusy = false
+    @Published var isPoweredOn = false
+    @Published var isReachable = false
+    @Published var hasSyncedFromLight = false
+    @Published var isSyncingFromLight = false
+    /// Up to 3 preset IDs shown in the menu bar Light section.
+    @Published var menuBarFavoriteIDs: [String]
+
+    static let maxMenuBarFavorites = 3
+
+    private let defaults = UserDefaults.standard
+    private let configURL: URL
+    private let bootMarkerURL: URL
+    private let lightName = "NEEWER-GL1 PRO"
+    private let apiBase = "http://localhost:18486"
+    private let apiUA = "neewerlite.sdPlugin/umbrella"
+    private let presetKey = "umbrella.neewer.presets"
+    private let menuBarFavoritesKey = "umbrella.neewer.menuBarFavoriteIDs"
+    private let powerOnModeKey = "umbrella.neewer.powerOnMode"
+    private let defaultBrightnessKey = "umbrella.neewer.defaultBrightness"
+    private let defaultKelvinKey = "umbrella.neewer.defaultKelvin"
+    private var pendingApplyFocus = "both"
+    private var coalesceGeneration: UInt64 = 0
+    private var isSendingCCT = false
+    private var queuedCCT: (brightness: Int, kelvin: Int, focus: String)?
+
+    init() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        configURL = home
+            .appendingPathComponent(".config/karabiner/neewer-light-config.json")
+        bootMarkerURL = home
+            .appendingPathComponent(".config/karabiner/neewer-light-boot.json")
+
+        let loadedPresets = Self.loadPresets(from: defaults, key: presetKey)
+        presets = loadedPresets
+
+        if let raw = defaults.string(forKey: powerOnModeKey),
+           let mode = UmbrellaNeewerPowerOnMode(rawValue: raw) {
+            powerOnMode = mode
+        } else {
+            powerOnMode = .lastValue
+        }
+
+        let rawBrightness = defaults.object(forKey: defaultBrightnessKey) as? Int ?? 80
+        let rawKelvin = defaults.object(forKey: defaultKelvinKey) as? Int ?? 5600
+        defaultBrightness = max(Self.minBrightness, min(Self.maxBrightness, rawBrightness))
+        defaultKelvin = Self.clampKelvin(rawKelvin)
+
+        let state = Self.readStateFile()
+        brightness = state.brightness
+        kelvin = state.kelvin
+
+        let storedFavorites = defaults.stringArray(forKey: menuBarFavoritesKey) ?? []
+        let validFavoriteIDs = storedFavorites.filter { id in loadedPresets.contains(where: { $0.id == id }) }
+        if validFavoriteIDs.isEmpty {
+            menuBarFavoriteIDs = Array(loadedPresets.prefix(Self.maxMenuBarFavorites).map(\.id))
+        } else {
+            menuBarFavoriteIDs = Array(validFavoriteIDs.prefix(Self.maxMenuBarFavorites))
+        }
+        defaults.set(menuBarFavoriteIDs, forKey: menuBarFavoritesKey)
+    }
+
+    var menuBarFavoritePresets: [UmbrellaNeewerPreset] {
+        menuBarFavoriteIDs.compactMap { id in presets.first(where: { $0.id == id }) }
+    }
+
+    func start() {
+        exportConfig()
+        Task { await refreshFromAPI() }
+    }
+
+    func stop() {
+            coalesceGeneration &+= 1
+            queuedCCT = nil
+            exportConfig()
+        }
+
+    func setPowerOnMode(_ mode: UmbrellaNeewerPowerOnMode) {
+        powerOnMode = mode
+        save()
+    }
+
+    func setBrightness(_ value: Int) {
+        brightness = max(Self.minBrightness, min(Self.maxBrightness, value))
+        statusMessage = "\(brightness)% · \(kelvin)K"
+        scheduleApply(focus: "brightness")
+    }
+
+    func setKelvin(_ value: Int) {
+        kelvin = Self.clampKelvin(value)
+        statusMessage = "\(brightness)% · \(kelvin)K"
+        scheduleApply(focus: "temp")
+    }
+
+    func setDefaultBrightness(_ value: Int) {
+        defaultBrightness = max(Self.minBrightness, min(Self.maxBrightness, value))
+        save()
+    }
+
+    func setDefaultKelvin(_ value: Int) {
+        defaultKelvin = Self.clampKelvin(value)
+        save()
+    }
+
+    func refreshCurrentValuesFromDisk() {
+        let state = Self.readStateFile()
+        brightness = state.brightness
+        kelvin = state.kelvin
+    }
+
+    @discardableResult
+    func refreshFromAPI() async -> Bool {
+        isSyncingFromLight = true
+        defer { isSyncingFromLight = false }
+
+        do {
+            let light = try await Self.fetchLight(lightName: lightName, apiBase: apiBase, apiUA: apiUA)
+            isReachable = true
+            isPoweredOn = light.isOn
+            brightness = light.brightness
+            kelvin = light.kelvin
+            hasSyncedFromLight = true
+            if light.isOn {
+                statusMessage = "\(light.brightness)% · \(light.kelvin)K"
+            } else {
+                statusMessage = "Off · \(light.brightness)% · \(light.kelvin)K"
+            }
+            Self.writeStateFile(
+                brightness: light.brightness,
+                temperature: max(29, min(70, Int((Double(light.kelvin) / 100.0).rounded())))
+            )
+            return true
+        } catch {
+            isReachable = false
+            hasSyncedFromLight = false
+            return false
+        }
+    }
+
+    func setPoweredOn(_ on: Bool) {
+        Task { @MainActor in
+            await applyPower(on)
+        }
+    }
+
+    func togglePower() {
+        setPoweredOn(!isPoweredOn)
+    }
+
+    func addPreset(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preset = UmbrellaNeewerPreset(
+            name: trimmed.isEmpty ? "\(brightness)% · \(kelvin)K" : trimmed,
+            brightness: brightness,
+            kelvin: kelvin
+        )
+        presets.append(preset)
+        save()
+    }
+
+    func updatePreset(_ preset: UmbrellaNeewerPreset) {
+        guard let index = presets.firstIndex(where: { $0.id == preset.id }) else { return }
+        var updated = preset
+        updated.brightness = max(Self.minBrightness, min(Self.maxBrightness, updated.brightness))
+        updated.kelvin = Self.clampKelvin(updated.kelvin)
+        presets[index] = updated
+        save()
+    }
+
+    func removePreset(_ presetID: String) {
+        presets.removeAll(where: { $0.id == presetID })
+        menuBarFavoriteIDs.removeAll { $0 == presetID }
+        save()
+    }
+
+    func isMenuBarFavorite(_ presetID: String) -> Bool {
+        menuBarFavoriteIDs.contains(presetID)
+    }
+
+    @discardableResult
+    func toggleMenuBarFavorite(_ presetID: String) -> Bool {
+        guard presets.contains(where: { $0.id == presetID }) else { return false }
+        if let index = menuBarFavoriteIDs.firstIndex(of: presetID) {
+            menuBarFavoriteIDs.remove(at: index)
+            save()
+            return true
+        }
+        guard menuBarFavoriteIDs.count < Self.maxMenuBarFavorites else { return false }
+        menuBarFavoriteIDs.append(presetID)
+        save()
+        return true
+    }
+
+    func applyPreset(id: String) {
+        guard let preset = presets.first(where: { $0.id == id }) else { return }
+        brightness = preset.brightness
+        kelvin = preset.kelvin
+        statusMessage = "\(brightness)% · \(kelvin)K"
+        applyValues(brightness: preset.brightness, kelvin: preset.kelvin, focus: "both", immediate: true)
+    }
+
+    func applyDefaultsNow() {
+        brightness = defaultBrightness
+        kelvin = defaultKelvin
+        statusMessage = "\(brightness)% · \(kelvin)K"
+        applyValues(brightness: defaultBrightness, kelvin: defaultKelvin, focus: "both", immediate: true)
+    }
+
+    private func scheduleApply(focus: String) {
+        pendingApplyFocus = focus
+        // Write intended state immediately so other tools stay in sync even if BLE lags.
+        let bri = brightness
+        let temp = max(29, min(70, Int((Double(kelvin) / 100.0).rounded())))
+        Self.writeStateFile(brightness: bri, temperature: temp)
+
+        // Generation coalesce instead of Task.cancel — canceling the trailing
+        // sleep could drop the final slider value until another control moved.
+        coalesceGeneration &+= 1
+        let generation = coalesceGeneration
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            guard generation == self.coalesceGeneration else { return }
+            self.enqueueCCT(
+                brightness: self.brightness,
+                kelvin: self.kelvin,
+                focus: self.pendingApplyFocus
+            )
+        }
+    }
+
+    /// Force-send the current slider values (e.g. when the user releases a drag).
+    func flushPendingApply() {
+        coalesceGeneration &+= 1
+        Self.writeStateFile(
+            brightness: brightness,
+            temperature: max(29, min(70, Int((Double(kelvin) / 100.0).rounded())))
+        )
+        enqueueCCT(brightness: brightness, kelvin: kelvin, focus: pendingApplyFocus)
+    }
+
+    private func applyValues(brightness: Int, kelvin: Int, focus: String, immediate: Bool) {
+        if immediate {
+            coalesceGeneration &+= 1
+        }
+        let bri = max(Self.minBrightness, min(Self.maxBrightness, brightness))
+        let kelvinClamped = Self.clampKelvin(kelvin)
+        statusMessage = "\(bri)% · \(kelvinClamped)K"
+        Self.writeStateFile(
+            brightness: bri,
+            temperature: max(29, min(70, Int((Double(kelvinClamped) / 100.0).rounded())))
+        )
+        enqueueCCT(brightness: bri, kelvin: kelvinClamped, focus: focus)
+    }
+
+    /// Sends CCT updates without canceling in-flight HTTP (which dropped mid-drag commands).
+    /// While a request is running, only the latest values are kept and flushed when it finishes.
+    private func enqueueCCT(brightness: Int, kelvin: Int, focus: String) {
+        let bri = max(Self.minBrightness, min(Self.maxBrightness, brightness))
+        let kelvinClamped = Self.clampKelvin(kelvin)
+        queuedCCT = (bri, kelvinClamped, focus)
+        pumpCCTQueue()
+    }
+
+    private func pumpCCTQueue() {
+        guard !isSendingCCT, let next = queuedCCT else { return }
+        queuedCCT = nil
+        isSendingCCT = true
+        isBusy = true
+
+        let bri = next.brightness
+        let kelvinClamped = next.kelvin
+        let temp = max(29, min(70, Int((Double(kelvinClamped) / 100.0).rounded())))
+
+        Task {
+            defer {
+                Task { @MainActor in
+                    self.isSendingCCT = false
+                    self.isBusy = self.queuedCCT != nil
+                    self.pumpCCTQueue()
+                }
+            }
+
+            do {
+                try await Self.postCCT(
+                    lightName: lightName,
+                    brightness: bri,
+                    temperature: temp,
+                    apiBase: apiBase,
+                    apiUA: apiUA
+                )
+                await MainActor.run {
+                    self.isReachable = true
+                    self.isPoweredOn = true
+                    // Don't overwrite slider values — user may have moved further already.
+                    if self.queuedCCT == nil {
+                        self.statusMessage = "\(self.brightness)% · \(self.kelvin)K"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isReachable = false
+                    self.statusMessage = "Couldn’t reach NeewerLite — is it running?"
+                }
+            }
+        }
+    }
+
+    private func applyPower(_ on: Bool) async {
+        isBusy = true
+        defer { isBusy = false }
+
+        do {
+            if on {
+                let shouldRestore = Self.isFirstPowerOnThisBoot(markerURL: bootMarkerURL)
+                if shouldRestore {
+                    let restore = restoreValuesForPowerOn()
+                    try await Self.postSwitch(lightName: lightName, state: true, apiBase: apiBase, apiUA: apiUA)
+                    let temp = max(29, min(70, Int((Double(restore.kelvin) / 100.0).rounded())))
+                    try await Self.postCCT(
+                        lightName: lightName,
+                        brightness: restore.brightness,
+                        temperature: temp,
+                        apiBase: apiBase,
+                        apiUA: apiUA
+                    )
+                    Self.writeStateFile(brightness: restore.brightness, temperature: temp)
+                    Self.markPowerOnThisBoot(markerURL: bootMarkerURL)
+                    brightness = restore.brightness
+                    kelvin = restore.kelvin
+                    statusMessage = "\(restore.brightness)% · \(restore.kelvin)K"
+                } else {
+                    try await Self.postSwitch(lightName: lightName, state: true, apiBase: apiBase, apiUA: apiUA)
+                    statusMessage = "\(brightness)% · \(kelvin)K"
+                }
+                isPoweredOn = true
+            } else {
+                try await Self.postSwitch(lightName: lightName, state: false, apiBase: apiBase, apiUA: apiUA)
+                isPoweredOn = false
+                statusMessage = "Off · \(brightness)% · \(kelvin)K"
+            }
+            isReachable = true
+            _ = await refreshFromAPI()
+            if isPoweredOn {
+                statusMessage = "\(brightness)% · \(kelvin)K"
+            } else {
+                statusMessage = "Off · \(brightness)% · \(kelvin)K"
+            }
+        } catch {
+            isReachable = false
+            statusMessage = "Couldn’t reach NeewerLite — is it running?"
+        }
+    }
+
+    private func restoreValuesForPowerOn() -> (brightness: Int, kelvin: Int) {
+        switch powerOnMode {
+        case .defaultValue:
+            return (defaultBrightness, defaultKelvin)
+        case .lastValue:
+            let state = Self.readStateFile()
+            return (state.brightness, state.kelvin)
+        }
+    }
+
+
+    private func save() {
+        defaults.set(powerOnMode.rawValue, forKey: powerOnModeKey)
+        defaults.set(defaultBrightness, forKey: defaultBrightnessKey)
+        defaults.set(defaultKelvin, forKey: defaultKelvinKey)
+        defaults.set(menuBarFavoriteIDs, forKey: menuBarFavoritesKey)
+        if let data = try? JSONEncoder().encode(presets) {
+            defaults.set(data, forKey: presetKey)
+        }
+        exportConfig()
+    }
+
+    private func exportConfig() {
+        let payload: [String: Any] = [
+            "powerOnMode": powerOnMode.rawValue,
+            "defaultBrightness": defaultBrightness,
+            "defaultTemperature": max(29, min(70, Int((Double(defaultKelvin) / 100.0).rounded()))),
+            "defaultKelvin": defaultKelvin,
+            "presets": presets.map { preset in
+                [
+                    "id": preset.id,
+                    "name": preset.name,
+                    "brightness": preset.brightness,
+                    "temperature": preset.temperature,
+                    "kelvin": preset.kelvin,
+                ] as [String: Any]
+            },
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) else {
+            return
+        }
+        let dir = configURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? data.write(to: configURL, options: .atomic)
+    }
+
+    private static func clampKelvin(_ value: Int) -> Int {
+        let stepped = Int((Double(value) / Double(kelvinStep)).rounded()) * kelvinStep
+        return max(minKelvin, min(maxKelvin, stepped))
+    }
+
+    private static func stateFileURL() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/karabiner/neewer-light-state.json")
+    }
+
+    private static func readStateFile() -> (brightness: Int, kelvin: Int) {
+        let url = stateFileURL()
+        guard
+            let data = try? Data(contentsOf: url),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return (80, 5600)
+        }
+        let brightness = max(minBrightness, min(maxBrightness, (json["brightness"] as? Int) ?? 80))
+        let temp: Int
+        if let t = json["temp"] as? Int {
+            temp = max(29, min(70, t))
+        } else if let cct = json["cct"] as? Int {
+            temp = max(29, min(70, Int((Double(cct) / 100.0).rounded())))
+        } else {
+            temp = 56
+        }
+        return (brightness, temp * 100)
+    }
+
+    private static func writeStateFile(brightness: Int, temperature: Int) {
+        let url = stateFileURL()
+        let payload: [String: Int] = [
+            "brightness": max(minBrightness, min(maxBrightness, brightness)),
+            "temp": max(29, min(70, temperature)),
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private static func postCCT(
+        lightName: String,
+        brightness: Int,
+        temperature: Int,
+        apiBase: String,
+        apiUA: String
+    ) async throws {
+        guard let url = URL(string: "\(apiBase)/cct") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiUA, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 1.5
+        let body: [String: Any] = [
+            "lights": [lightName],
+            "brightness": brightness,
+            "temperature": temperature,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    private static func postSwitch(
+        lightName: String,
+        state: Bool,
+        apiBase: String,
+        apiUA: String
+    ) async throws {
+        guard let url = URL(string: "\(apiBase)/switch") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiUA, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 3
+        let body: [String: Any] = [
+            "lights": [lightName],
+            "state": state,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    private static func fetchLight(
+        lightName: String,
+        apiBase: String,
+        apiUA: String
+    ) async throws -> (isOn: Bool, brightness: Int, kelvin: Int) {
+        guard let url = URL(string: "\(apiBase)/listLights") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiUA, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 3
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let lights = json["lights"] as? [[String: Any]],
+            let light = lights.first(where: { ($0["name"] as? String) == lightName }) ?? lights.first
+        else {
+            throw URLError(.cannotParseResponse)
+        }
+
+        let isOn = boolValue(light["state"]) ?? false
+        let brightness = max(minBrightness, min(maxBrightness, intValue(light["brightness"]) ?? 80))
+        let temperature: Int
+        if let temp = intValue(light["temperature"]) {
+            temperature = max(29, min(70, temp))
+        } else if let cct = intValue(light["cct"]) {
+            temperature = max(29, min(70, Int((Double(cct) / 100.0).rounded())))
+        } else {
+            temperature = 56
+        }
+        return (isOn, brightness, temperature * 100)
+    }
+
+    /// NeewerLite returns many numeric fields as strings (e.g. `"2"`, `"56"`).
+    private static func intValue(_ raw: Any?) -> Int? {
+        switch raw {
+        case let value as Int:
+            return value
+        case let value as Double:
+            return Int(value.rounded())
+        case let value as Float:
+            return Int(value.rounded())
+        case let value as NSNumber:
+            return value.intValue
+        case let value as String:
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let int = Int(trimmed) { return int }
+            if let double = Double(trimmed) { return Int(double.rounded()) }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private static func boolValue(_ raw: Any?) -> Bool? {
+        switch raw {
+        case let value as Bool:
+            return value
+        case let value as Int:
+            return value != 0
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "1", "true", "on", "yes":
+                return true
+            case "0", "false", "off", "no":
+                return false
+            default:
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    private static func currentBootID() -> String {
+        var size = 0
+        sysctlbyname("kern.boottime", nil, &size, nil, 0)
+        var boottime = timeval()
+        var boottimeSize = MemoryLayout<timeval>.size
+        if sysctlbyname("kern.boottime", &boottime, &boottimeSize, nil, 0) == 0 {
+            return String(boottime.tv_sec)
+        }
+        return "0"
+    }
+
+    private static func isFirstPowerOnThisBoot(markerURL: URL) -> Bool {
+        let bootID = currentBootID()
+        guard
+            let data = try? Data(contentsOf: markerURL),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let stored = json["bootId"] as? String
+        else {
+            return true
+        }
+        return stored != bootID
+    }
+
+    private static func markPowerOnThisBoot(markerURL: URL) {
+        let payload = ["bootId": currentBootID()]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        let dir = markerURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? data.write(to: markerURL, options: .atomic)
+    }
+
+    private static func loadPresets(from defaults: UserDefaults, key: String) -> [UmbrellaNeewerPreset] {
+        if let data = defaults.data(forKey: key),
+           let loaded = try? JSONDecoder().decode([UmbrellaNeewerPreset].self, from: data) {
+            return loaded
+        }
+        return [
+            UmbrellaNeewerPreset(name: "Desk", brightness: 45, kelvin: 4500),
+            UmbrellaNeewerPreset(name: "Video", brightness: 80, kelvin: 5600),
+            UmbrellaNeewerPreset(name: "Warm", brightness: 30, kelvin: 3200),
         ]
     }
 }
@@ -1654,234 +2259,6 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 }
 
-@MainActor
-final class UmbrellaNeewerHUDBridge: NSObject {
-    private let notificationName = Notification.Name("com.kevinwolfrom.neewerhud.update")
-    private let state = UmbrellaNeewerHUDState()
-    private var panel: NSPanel?
-    private var hideTimer: Timer?
-
-    func start() {
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(handleUpdate(_:)),
-            name: notificationName,
-            object: nil
-        )
-    }
-
-    func stop() {
-        DistributedNotificationCenter.default().removeObserver(self)
-        hideTimer?.invalidate()
-        panel?.orderOut(nil)
-    }
-
-    @objc private func handleUpdate(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let brightness = userInfo["brightness"] as? Int,
-              let kelvin = userInfo["kelvin"] as? Int
-        else {
-            return
-        }
-        let focusRaw = userInfo["focus"] as? String
-        let focus: UmbrellaNeewerHUDFocus = {
-            switch focusRaw {
-            case "brightness": return .brightness
-            case "temp": return .temp
-            default: return .both
-            }
-        }()
-
-        state.brightness = Double(max(1, min(100, brightness))) / 100
-        state.kelvin = Double(max(2900, min(7000, kelvin)))
-        state.focus = focus
-        ensurePanel()
-        positionPanel()
-
-        if let panel, !panel.isVisible {
-            panel.alphaValue = 0
-            panel.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.12
-                panel.animator().alphaValue = 1
-            }
-        } else {
-            panel?.orderFrontRegardless()
-        }
-
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 1.4, repeats: false) { [weak self] _ in
-            guard let panel = self?.panel else { return }
-            NSAnimationContext.runAnimationGroup(
-                { context in
-                    context.duration = 0.18
-                    panel.animator().alphaValue = 0
-                },
-                completionHandler: { panel.orderOut(nil) }
-            )
-        }
-    }
-
-    private func ensurePanel() {
-        guard panel == nil else { return }
-        let size = UmbrellaNeewerHUDView.panelSize
-        let host = NSHostingView(rootView: UmbrellaNeewerHUDView(state: state))
-        host.frame = NSRect(origin: .zero, size: size)
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.ignoresMouseEvents = true
-        panel.hasShadow = false
-        panel.contentView = host
-        self.panel = panel
-    }
-
-    private func positionPanel() {
-        guard let panel else { return }
-        let screen = MainActor.assumeIsolated { ActiveScreenTracker.presentationScreen(excluding: panel) }
-        let visible = screen.visibleFrame
-        let size = panel.frame.size
-        panel.setFrameOrigin(
-            NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2 + visible.height * 0.12)
-        )
-    }
-}
-
-private enum UmbrellaNeewerHUDFocus {
-    case brightness
-    case temp
-    case both
-
-    var title: String {
-        switch self {
-        case .brightness: return "Brightness"
-        case .temp: return "Warmth"
-        case .both: return "Neewer"
-        }
-    }
-}
-
-private final class UmbrellaNeewerHUDState: ObservableObject {
-    @Published var brightness: Double = 0.8
-    @Published var kelvin: Double = 5600
-    @Published var focus: UmbrellaNeewerHUDFocus = .both
-}
-
-private struct UmbrellaNeewerHUDView: View {
-    static let panelSize = NSSize(width: 460, height: 132)
-    private static let trackWidth: CGFloat = 300
-    private static let contentWidth: CGFloat = 420
-    private static let minKelvin = 2900.0
-    private static let maxKelvin = 7000.0
-
-    @ObservedObject var state: UmbrellaNeewerHUDState
-
-    private var warmthProgress: Double {
-        (Self.maxKelvin - state.kelvin) / (Self.maxKelvin - Self.minKelvin)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(state.focus.title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.55))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            row(
-                icon: "sun.max.fill",
-                iconColor: .yellow,
-                progress: state.brightness,
-                label: "\(Int((state.brightness * 100).rounded()))%",
-                trackFill: LinearGradient(
-                    colors: [.white.opacity(0.95), .white.opacity(0.7)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                emphasized: state.focus == .brightness || state.focus == .both
-            )
-            row(
-                icon: "thermometer.medium",
-                iconColor: .orange,
-                progress: warmthProgress,
-                label: "\(Int(state.kelvin.rounded()))K",
-                trackFill: LinearGradient(
-                    colors: [.blue, .cyan, .yellow, .orange, .red],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                emphasized: state.focus == .temp || state.focus == .both
-            )
-        }
-        .frame(width: Self.contentWidth)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .frame(width: Self.panelSize.width, height: Self.panelSize.height)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: NSColor(white: 0.12, alpha: 0.88)))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
-        }
-        .animation(.easeInOut(duration: 0.2), value: state.brightness)
-        .animation(.easeInOut(duration: 0.2), value: state.kelvin)
-        .animation(.easeInOut(duration: 0.2), value: state.focus)
-    }
-
-    private func row(
-        icon: String,
-        iconColor: Color,
-        progress: Double,
-        label: String,
-        trackFill: LinearGradient,
-        emphasized: Bool
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(iconColor)
-                .frame(width: 20)
-
-            track(progress: progress, fill: trackFill)
-
-            Text(label)
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 64, alignment: .trailing)
-        }
-        .frame(width: Self.contentWidth)
-        .opacity(emphasized ? 1 : 0.38)
-    }
-
-    private func track(progress: Double, fill: LinearGradient) -> some View {
-        let clamped = min(1, max(0, progress))
-        return ZStack(alignment: .leading) {
-            Capsule().fill(Color.white.opacity(0.18))
-            Capsule()
-                .fill(fill)
-                .frame(width: max(4, Self.trackWidth * clamped))
-            if clamped > 0.04 && clamped < 0.96 {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
-                    .offset(x: Self.trackWidth * clamped - 3)
-            }
-        }
-        .frame(width: Self.trackWidth, height: 8)
-    }
-}
 
 // MARK: - Screen recording stack (ported from SimpleSnip)
 
