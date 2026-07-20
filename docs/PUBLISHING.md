@@ -15,9 +15,9 @@ Fix anything it reports. Common items:
 - Integration tokens or API keys
 - Personal project names in defaults or README
 
-## 2. Clean git history (important)
+## 2. Clean git history (if needed)
 
-**Current commits may still contain old personal paths and a Notion database ID** even after you scrub the latest files. Anyone cloning can see past commits.
+If a personal path, Notion ID, or token ever landed in a commit, scrub history **before** (or right after) going public — `main` alone is not enough; old SHAs stay cloneable.
 
 Pick one approach before the first public push:
 
