@@ -1,0 +1,375 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000004 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* MenuBarController.swift */; };
+		B10000000000000000000022 /* PromptInputShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000024 /* PromptInputShell.swift */; };
+		B10000000000000000000024 /* PopupChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000026 /* PopupChrome.swift */; };
+		B10000000000000000000025 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000027 /* SettingsView.swift */; };
+		B10000000000000000000035 /* MenuBarControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000037 /* MenuBarControlsView.swift */; };
+		B10000000000000000000026 /* SettingsPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000028 /* SettingsPanelController.swift */; };
+		B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000025 /* ClickOutsideDismissal.swift */; };
+		B10000000000000000000001 /* UmbrellaHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* UmbrellaHelperApp.swift */; };
+		B10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* AppModel.swift */; };
+		B10000000000000000000040 /* UmbrellaBrightnessFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */; };
+		B10000000000000000000041 /* UmbrellaNeewerLightFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */; };
+		B10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */; };
+		B10000000000000000000003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AppSettings.swift */; };
+		B10000000000000000000007 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000007 /* GlobalHotKey.swift */; };
+		B10000000000000000000008 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* LaunchAtLogin.swift */; };
+		B10000000000000000000009 /* PanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000009 /* PanelController.swift */; };
+		B10000000000000000000017 /* HistoryKeyHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* HistoryKeyHandler.swift */; };
+		B10000000000000000000019 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000021 /* MenuBarIcon.swift */; };
+		B10000000000000000000028 /* HotKeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000030 /* HotKeyRecorderView.swift */; };
+		B10000000000000000000027 /* ActiveScreenTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000029 /* ActiveScreenTracker.swift */; };
+		B10000000000000000000029 /* NotionTaskPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000031 /* NotionTaskPanelController.swift */; };
+		B10000000000000000000030 /* NotionAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000032 /* NotionAPIClient.swift */; };
+		B10000000000000000000031 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000033 /* KeychainStorage.swift */; };
+		B10000000000000000000032 /* NotionTaskContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000034 /* NotionTaskContentView.swift */; };
+		B10000000000000000000034 /* SystemPermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000036 /* SystemPermissions.swift */; };
+		B10000000000000000000033 /* AppRelauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000035 /* AppRelauncher.swift */; };
+		B10000000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* Umbrella Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Umbrella Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000001 /* UmbrellaHelperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaHelperApp.swift; sourceTree = "<group>"; };
+		F10000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaBrightnessFeature.swift; sourceTree = "<group>"; };
+		F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaNeewerLightFeature.swift; sourceTree = "<group>"; };
+		F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaSimpleSnipFeature.swift; sourceTree = "<group>"; };
+		F10000000000000000000003 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		F10000000000000000000004 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		F10000000000000000000007 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		F10000000000000000000008 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
+		F10000000000000000000009 /* PanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10000000000000000000012 /* UmbrellaHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UmbrellaHelper.entitlements; sourceTree = "<group>"; };
+		F10000000000000000000019 /* HistoryKeyHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryKeyHandler.swift; sourceTree = "<group>"; };
+		F10000000000000000000021 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
+		F10000000000000000000024 /* PromptInputShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptInputShell.swift; sourceTree = "<group>"; };
+		F10000000000000000000028 /* SettingsPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000037 /* MenuBarControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarControlsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000026 /* PopupChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupChrome.swift; sourceTree = "<group>"; };
+		F10000000000000000000030 /* HotKeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyRecorderView.swift; sourceTree = "<group>"; };
+		F10000000000000000000036 /* SystemPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPermissions.swift; sourceTree = "<group>"; };
+		F10000000000000000000035 /* AppRelauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRelauncher.swift; sourceTree = "<group>"; };
+		F10000000000000000000034 /* NotionTaskContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotionTaskContentView.swift; sourceTree = "<group>"; };
+		F10000000000000000000033 /* KeychainStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStorage.swift; sourceTree = "<group>"; };
+		F10000000000000000000032 /* NotionAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotionAPIClient.swift; sourceTree = "<group>"; };
+		F10000000000000000000031 /* NotionTaskPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotionTaskPanelController.swift; sourceTree = "<group>"; };
+		F10000000000000000000029 /* ActiveScreenTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveScreenTracker.swift; sourceTree = "<group>"; };
+		F10000000000000000000025 /* ClickOutsideDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickOutsideDismissal.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G10000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				G10000000000000000000002 /* UmbrellaHelper */,
+				G10000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G10000000000000000000007 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */,
+				F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */,
+				F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000002 /* UmbrellaHelper */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000001 /* UmbrellaHelperApp.swift */,
+				F10000000000000000000002 /* AppModel.swift */,
+				F10000000000000000000003 /* AppSettings.swift */,
+				G10000000000000000000007 /* Features */,
+				G10000000000000000000004 /* Views */,
+				G10000000000000000000005 /* Services */,
+				G10000000000000000000006 /* Resources */,
+				F10000000000000000000011 /* Info.plist */,
+				F10000000000000000000012 /* UmbrellaHelper.entitlements */,
+			);
+			path = UmbrellaHelper;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000001 /* Umbrella Helper.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000004 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000024 /* PromptInputShell.swift */,
+				F10000000000000000000026 /* PopupChrome.swift */,
+				F10000000000000000000027 /* SettingsView.swift */,
+				F10000000000000000000037 /* MenuBarControlsView.swift */,
+				F10000000000000000000030 /* HotKeyRecorderView.swift */,
+				F10000000000000000000034 /* NotionTaskContentView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000007 /* GlobalHotKey.swift */,
+				F10000000000000000000008 /* LaunchAtLogin.swift */,
+				F10000000000000000000009 /* PanelController.swift */,
+				F10000000000000000000019 /* HistoryKeyHandler.swift */,
+				F10000000000000000000021 /* MenuBarIcon.swift */,
+				F10000000000000000000004 /* MenuBarController.swift */,
+				F10000000000000000000025 /* ClickOutsideDismissal.swift */,
+				F10000000000000000000029 /* ActiveScreenTracker.swift */,
+				F10000000000000000000028 /* SettingsPanelController.swift */,
+				F10000000000000000000031 /* NotionTaskPanelController.swift */,
+				F10000000000000000000032 /* NotionAPIClient.swift */,
+				F10000000000000000000033 /* KeychainStorage.swift */,
+				F10000000000000000000035 /* AppRelauncher.swift */,
+				F10000000000000000000036 /* SystemPermissions.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000006 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000010 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		T10000000000000000000001 /* UmbrellaHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L10000000000000000000003 /* Build configuration list for PBXNativeTarget "UmbrellaHelper" */;
+			buildPhases = (
+				P10000000000000000000001 /* Sources */,
+				C10000000000000000000001 /* Frameworks */,
+				P10000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = UmbrellaHelper;
+			packageProductDependencies = (
+			);
+			productName = "Umbrella Helper";
+			productReference = A10000000000000000000001 /* Umbrella Helper.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PR1000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					T10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = L10000000000000000000001 /* Build configuration list for PBXProject "UmbrellaHelper" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = G10000000000000000000001;
+			packageReferences = (
+			);
+			productRefGroup = G10000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				T10000000000000000000001 /* UmbrellaHelper */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		P10000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000010 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		P10000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* UmbrellaHelperApp.swift in Sources */,
+				B10000000000000000000002 /* AppModel.swift in Sources */,
+				B10000000000000000000040 /* UmbrellaBrightnessFeature.swift in Sources */,
+				B10000000000000000000041 /* UmbrellaNeewerLightFeature.swift in Sources */,
+				B10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift in Sources */,
+				B10000000000000000000003 /* AppSettings.swift in Sources */,
+				B10000000000000000000007 /* GlobalHotKey.swift in Sources */,
+				B10000000000000000000008 /* LaunchAtLogin.swift in Sources */,
+				B10000000000000000000009 /* PanelController.swift in Sources */,
+				B10000000000000000000017 /* HistoryKeyHandler.swift in Sources */,
+				B10000000000000000000019 /* MenuBarIcon.swift in Sources */,
+				B10000000000000000000004 /* MenuBarController.swift in Sources */,
+				B10000000000000000000022 /* PromptInputShell.swift in Sources */,
+				B10000000000000000000023 /* ClickOutsideDismissal.swift in Sources */,
+				B10000000000000000000027 /* ActiveScreenTracker.swift in Sources */,
+				B10000000000000000000024 /* PopupChrome.swift in Sources */,
+				B10000000000000000000025 /* SettingsView.swift in Sources */,
+				B10000000000000000000035 /* MenuBarControlsView.swift in Sources */,
+				B10000000000000000000028 /* HotKeyRecorderView.swift in Sources */,
+				B10000000000000000000026 /* SettingsPanelController.swift in Sources */,
+				B10000000000000000000029 /* NotionTaskPanelController.swift in Sources */,
+				B10000000000000000000030 /* NotionAPIClient.swift in Sources */,
+				B10000000000000000000031 /* KeychainStorage.swift in Sources */,
+				B10000000000000000000032 /* NotionTaskContentView.swift in Sources */,
+				B10000000000000000000033 /* AppRelauncher.swift in Sources */,
+				B10000000000000000000034 /* SystemPermissions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		D10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = UmbrellaHelper/UmbrellaHelper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = UmbrellaHelper/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinwolfrom.umbrella;
+				PRODUCT_NAME = "Umbrella Helper";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = UmbrellaHelper/UmbrellaHelper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = UmbrellaHelper/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinwolfrom.umbrella;
+				PRODUCT_NAME = "Umbrella Helper";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		L10000000000000000000001 /* Build configuration list for PBXProject "UmbrellaHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D10000000000000000000001 /* Debug */,
+				D10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		L10000000000000000000003 /* Build configuration list for PBXNativeTarget "UmbrellaHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D10000000000000000000003 /* Debug */,
+				D10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = PR1000000000000000000001 /* Project object */;
+}
