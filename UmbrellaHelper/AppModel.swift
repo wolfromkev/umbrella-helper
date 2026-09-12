@@ -50,6 +50,9 @@ final class AppModel: ObservableObject {
         settingsPanelController.configure(model: self)
         notionTaskPanelController.configure(model: self)
         brightnessFeature.start()
+        simpleSnipFeature.onDisplayCaptureSettled = { [weak self] in
+            self?.brightnessFeature.reapplyGammaAfterDisplayCapture()
+        }
         simpleSnipFeature.start()
         neewerLightFeature.start()
         reloadHotKeys()
@@ -84,6 +87,7 @@ final class AppModel: ObservableObject {
         neewerPresetHotKeys.removeAll()
         settingsPanelController.closePanel()
         notionTaskPanelController.closePanel()
+        simpleSnipFeature.onDisplayCaptureSettled = nil
         brightnessFeature.stop()
         simpleSnipFeature.stop()
         neewerLightFeature.stop()

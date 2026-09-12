@@ -1,6 +1,8 @@
 import AppKit
 import Combine
 import CoreGraphics
+import CoreLocation
+@preconcurrency import ColorSync
 import Darwin
 import SwiftUI
 
@@ -155,7 +157,9 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     @Published var presets: [UmbrellaSunPreset]
     @Published var dayPresetID: String
     @Published var nightPresetID: String
-    @Published var locationName: String?
+    @Published var locationName: String? = nil
+    @Published var locationLatitude: Double? = nil
+    @Published var locationLongitude: Double? = nil
     /// Up to 3 preset IDs shown in the menu bar Screen section.
     @Published var menuBarFavoriteIDs: [String]
 
@@ -164,12 +168,19 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     private var keepAwakeActivity: NSObjectProtocol?
     private var timer: Timer?
     private var screenChangeObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+    private var colorSyncObservers: [NSObjectProtocol] = []
     private var pendingApplyWorkItem: DispatchWorkItem?
     private var screenChangeWorkItem: DispatchWorkItem?
+    private var followUpReapplyWorkItem: DispatchWorkItem?
     private var needsPersist = false
+    private var lastSolarComputationDay: Int?
+    private let locationProvider = UmbrellaLocationProvider()
     private let defaults = UserDefaults.standard
     private let presetKey = "umbrella.sunscreen.presets"
     private let menuBarFavoritesKey = "umbrella.sunscreen.menuBarFavoriteIDs"
+    private let latitudeKey = "umbrella.sunscreen.latitude"
+    private let longitudeKey = "umbrella.sunscreen.longitude"
     /// Set while Film Mode gamma is applied; cleared only on clean `stop()`.
     /// If still set at next launch, gamma is restored and Film Mode is turned off.
     private let filmModeDirtyKey = "umbrella.sunscreen.filmModeDirty"
@@ -177,6 +188,10 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     private static let applyThrottleInterval: TimeInterval = 0.05
     /// Wait for display reconnect / wake to settle before re-applying gamma.
     private static let screenChangeDebounceInterval: TimeInterval = 0.35
+    /// `screencapture` / WindowServer often reset the LUT again after the process exits.
+    private static let captureReapplyDelay: TimeInterval = 0.45
+    /// Second pass after ColorSync / screen-parameter clobbers.
+    private static let followUpReapplyDelay: TimeInterval = 0.6
 
     init() {
         let loadedPresets = Self.loadPresets(from: defaults, key: presetKey)
@@ -209,6 +224,28 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         if let data = try? JSONEncoder().encode(presets) {
             defaults.set(data, forKey: presetKey)
         }
+
+        if defaults.object(forKey: latitudeKey) != nil {
+            locationLatitude = defaults.double(forKey: latitudeKey)
+        }
+        if defaults.object(forKey: longitudeKey) != nil {
+            locationLongitude = defaults.double(forKey: longitudeKey)
+        }
+        if let latitude = locationLatitude, let longitude = locationLongitude {
+            locationName = UmbrellaSolarSchedule.coordinateLabel(
+                CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            )
+        }
+
+        locationProvider.onLocation = { [weak self] coordinate in
+            self?.handleLocation(coordinate)
+        }
+        locationProvider.onPlaceName = { [weak self] name in
+            self?.locationName = name
+        }
+        locationProvider.onStatus = { [weak self] message in
+            self?.locationName = message
+        }
     }
 
     var menuBarFavoritePresets: [UmbrellaSunPreset] {
@@ -226,6 +263,10 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         }
 
         applyKeepAwake()
+        if useLocationSchedule {
+            refreshSolarTimesIfNeeded(force: true)
+            locationProvider.start()
+        }
         refreshAutoStateIfNeeded()
         apply(persist: true, immediate: true)
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -240,23 +281,45 @@ final class UmbrellaBrightnessFeature: ObservableObject {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor in
-                    self?.handleScreenParametersChanged()
+                    self?.handlePossibleGammaClobber()
                 }
             }
         }
+        if wakeObserver == nil {
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.handlePossibleGammaClobber()
+                }
+            }
+        }
+        observeColorSyncProfileChanges()
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        locationProvider.stop()
         pendingApplyWorkItem?.cancel()
         pendingApplyWorkItem = nil
         screenChangeWorkItem?.cancel()
         screenChangeWorkItem = nil
+        followUpReapplyWorkItem?.cancel()
+        followUpReapplyWorkItem = nil
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
             self.screenChangeObserver = nil
         }
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
+        let colorSyncCenter = DistributedNotificationCenter.default()
+        colorSyncObservers.forEach { colorSyncCenter.removeObserver($0) }
+        colorSyncObservers.removeAll()
         releaseKeepAwake()
         UmbrellaBlueLightManager.reset()
         defaults.set(false, forKey: filmModeDirtyKey)
@@ -297,8 +360,18 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         pendingApplyWorkItem = nil
         screenChangeWorkItem?.cancel()
         screenChangeWorkItem = nil
+        followUpReapplyWorkItem?.cancel()
+        followUpReapplyWorkItem = nil
         UmbrellaBlueLightManager.reset()
         apply(persist: true, immediate: true)
+    }
+
+    /// Screen capture and ColorSync often wipe `CGSetDisplayTransferByFormula`.
+    /// Call after a snip/record so brightness/warmth/Film Mode come back.
+    func reapplyGammaAfterDisplayCapture() {
+        screenChangeWorkItem?.cancel()
+        apply(persist: false, immediate: true)
+        scheduleFollowUpReapply(after: Self.captureReapplyDelay)
     }
 
     func setDarkroom(_ enabled: Bool) {
@@ -315,11 +388,17 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     func setUseLocationSchedule(_ enabled: Bool) {
         useLocationSchedule = enabled
         if enabled {
-            locationName = "Using system location"
+            locationName = locationName ?? "Finding sunrise and sunset…"
+            refreshSolarTimesIfNeeded(force: true)
+            locationProvider.start()
         } else {
-            locationName = nil
+            locationProvider.stop()
+            if locationLatitude == nil {
+                locationName = nil
+            }
         }
         save()
+        refreshAutoStateIfNeeded()
     }
 
     func setKeepAwake(_ enabled: Bool) {
@@ -409,17 +488,17 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     }
 
     func refreshAutoStateIfNeeded() {
+        if useLocationSchedule {
+            refreshSolarTimesIfNeeded(force: false)
+        }
+
         guard isAutoMode else {
-            save()
+            // Capture / ColorSync can wipe the LUT even when auto is off.
+            apply(persist: false, immediate: true)
             return
         }
 
-        let now = Calendar.current.component(.hour, from: Date()) * 60
-            + Calendar.current.component(.minute, from: Date())
-        let transition = max(15, min(240, transitionMinutes))
-        let sunriseStart = sunriseMinutes - transition
-        let sunsetStart = sunsetMinutes - transition
-
+        let now = UmbrellaSolarSchedule.minutesOfDay(from: Date())
         let dayPreset = presets.first(where: { $0.id == dayPresetID }) ?? presets.first
         let nightPreset = presets.first(where: { $0.id == nightPresetID }) ?? presets.last ?? presets.first
 
@@ -428,50 +507,106 @@ final class UmbrellaBrightnessFeature: ObservableObject {
             return
         }
 
-        if now >= sunriseMinutes && now < sunsetStart {
-            brightness = dayPreset.brightness
-            colorTemp = dayPreset.colorTemp
-            isDarkroom = dayPreset.isDarkroom
-        } else if now < sunriseStart || now >= sunsetMinutes {
+        let progress = UmbrellaSolarSchedule.daylightProgress(
+            at: now,
+            sunrise: sunriseMinutes,
+            sunset: sunsetMinutes,
+            transition: transitionMinutes
+        )
+
+        if progress <= 0.001 {
             brightness = nightPreset.brightness
             colorTemp = nightPreset.colorTemp
             isDarkroom = nightPreset.isDarkroom
-        } else if now >= sunriseStart && now < sunriseMinutes {
-            let progress = Float(now - sunriseStart) / Float(max(1, transition))
-            brightness = interpolate(from: nightPreset.brightness, to: dayPreset.brightness, progress: progress)
-            colorTemp = interpolate(from: nightPreset.colorTemp, to: dayPreset.colorTemp, progress: progress)
-            isDarkroom = false
         } else {
-            let progress = Float(now - sunsetStart) / Float(max(1, transition))
-            brightness = interpolate(from: dayPreset.brightness, to: nightPreset.brightness, progress: progress)
-            colorTemp = interpolate(from: dayPreset.colorTemp, to: nightPreset.colorTemp, progress: progress)
+            brightness = lerp(nightPreset.brightness, dayPreset.brightness, progress)
+            colorTemp = lerp(nightPreset.colorTemp, dayPreset.colorTemp, progress)
             isDarkroom = false
         }
         apply(persist: true, immediate: true)
     }
 
-    private func interpolate(from start: Float, to end: Float, progress: Float) -> Float {
+    private func lerp(_ start: Float, _ end: Float, _ progress: Float) -> Float {
         let t = max(0, min(1, progress))
-        let smooth = t * t * (3 - 2 * t)
-        return start + (end - start) * smooth
+        return start + (end - start) * t
     }
 
-    private func interpolate(from start: Int, to end: Int, progress: Float) -> Int {
+    private func lerp(_ start: Int, _ end: Int, _ progress: Float) -> Int {
         let t = max(0, min(1, progress))
-        let smooth = t * t * (3 - 2 * t)
-        return start + Int(Float(end - start) * smooth)
+        return start + Int((Float(end - start) * t).rounded())
     }
 
-    private func handleScreenParametersChanged() {
+    private func handleLocation(_ coordinate: CLLocationCoordinate2D) {
+        locationLatitude = coordinate.latitude
+        locationLongitude = coordinate.longitude
+        defaults.set(coordinate.latitude, forKey: latitudeKey)
+        defaults.set(coordinate.longitude, forKey: longitudeKey)
+        refreshSolarTimesIfNeeded(force: true)
+        refreshAutoStateIfNeeded()
+    }
+
+    private func refreshSolarTimesIfNeeded(force: Bool) {
+        guard useLocationSchedule,
+              let latitude = locationLatitude,
+              let longitude = locationLongitude else { return }
+
+        let day = Calendar.current.ordinality(of: .day, in: .year, for: Date())
+        guard force || day != lastSolarComputationDay else { return }
+        lastSolarComputationDay = day
+
+        guard let times = UmbrellaSolarSchedule.sunTimes(
+            date: Date(),
+            latitude: latitude,
+            longitude: longitude
+        ) else { return }
+
+        sunriseMinutes = times.sunrise
+        sunsetMinutes = times.sunset
+    }
+
+    private func observeColorSyncProfileChanges() {
+        guard colorSyncObservers.isEmpty else { return }
+        let center = DistributedNotificationCenter.default()
+        let names = [
+            kColorSyncDeviceProfilesNotification,
+            kColorSyncDisplayDeviceProfilesNotification
+        ].compactMap { constant -> Notification.Name? in
+            guard let name = constant?.takeUnretainedValue() as String? else { return nil }
+            return Notification.Name(name)
+        }
+        for name in names {
+            let observer = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.handlePossibleGammaClobber()
+                }
+            }
+            colorSyncObservers.append(observer)
+        }
+    }
+
+    /// Re-apply current settings after something else reset the display LUT.
+    /// Do not ColorSync-restore first — that flashes identity brightness and
+    /// races with `screencapture`, which can then restore the identity table.
+    private func handlePossibleGammaClobber() {
         screenChangeWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            // After wake / reconnect, ColorSync may have reset — restore then apply once.
-            UmbrellaBlueLightManager.reset()
-            self.apply(persist: true, immediate: true)
+            self.apply(persist: false, immediate: true)
+            self.scheduleFollowUpReapply(after: Self.followUpReapplyDelay)
         }
         screenChangeWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.screenChangeDebounceInterval, execute: work)
+    }
+
+    private func scheduleFollowUpReapply(after delay: TimeInterval) {
+        followUpReapplyWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.followUpReapplyWorkItem = nil
+            self.apply(persist: false, immediate: true)
+        }
+        followUpReapplyWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func apply(persist: Bool, immediate: Bool) {
@@ -541,6 +676,12 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         defaults.set(dayPresetID, forKey: "umbrella.sunscreen.dayPresetID")
         defaults.set(nightPresetID, forKey: "umbrella.sunscreen.nightPresetID")
         defaults.set(menuBarFavoriteIDs, forKey: menuBarFavoritesKey)
+        if let locationLatitude {
+            defaults.set(locationLatitude, forKey: latitudeKey)
+        }
+        if let locationLongitude {
+            defaults.set(locationLongitude, forKey: longitudeKey)
+        }
         if let data = try? JSONEncoder().encode(presets) {
             defaults.set(data, forKey: presetKey)
         }

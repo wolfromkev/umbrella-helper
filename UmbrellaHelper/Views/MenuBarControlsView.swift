@@ -19,6 +19,42 @@ struct MenuBarControlsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader("Screen", systemImage: "sun.max.fill") {
+                Toggle(
+                    "Automatic",
+                    isOn: Binding(
+                        get: { brightnessFeature.isAutoMode },
+                        set: { brightnessFeature.setAutoMode($0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                if brightnessFeature.isAutoMode {
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        let now = UmbrellaSolarSchedule.minutesOfDay(from: context.date)
+                        VStack(alignment: .leading, spacing: 4) {
+                            UmbrellaDayCurveView(
+                                sunriseMinutes: brightnessFeature.sunriseMinutes,
+                                sunsetMinutes: brightnessFeature.sunsetMinutes,
+                                transitionMinutes: brightnessFeature.transitionMinutes,
+                                nowMinutes: now,
+                                height: 44
+                            )
+                            Text(
+                                UmbrellaSolarSchedule.statusText(
+                                    at: now,
+                                    sunrise: brightnessFeature.sunriseMinutes,
+                                    sunset: brightnessFeature.sunsetMinutes,
+                                    transition: brightnessFeature.transitionMinutes
+                                )
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        }
+                    }
+                }
+
                 if !brightnessFeature.menuBarFavoritePresets.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(brightnessFeature.menuBarFavoritePresets) { preset in

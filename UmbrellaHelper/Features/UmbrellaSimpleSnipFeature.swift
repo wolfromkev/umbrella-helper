@@ -42,6 +42,9 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     @Published private(set) var microphoneState: UmbrellaPermissionState
     @Published private(set) var debugLog: [String] = []
 
+    /// Screen capture resets display gamma tables; brightness re-applies after this.
+    var onDisplayCaptureSettled: (() -> Void)?
+
     private let defaults = UserDefaults.standard
     private let screenRecorder = UmbrellaScreenRecorder()
     private var recordingOverlay: UmbrellaRecordingOverlay?
@@ -173,6 +176,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 self?.shareableContentPrewarmTask = nil
                 self?.areaSelector = nil
                 self?.logDebug("record: selection cancelled")
+                self?.notifyDisplayCaptureSettled()
             }
         )
         areaSelector = selector
@@ -256,12 +260,14 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 self.isStartingRecording = false
                 self.screenCaptureState = .allowed
                 self.logDebug("record started: \(outputURL.lastPathComponent)")
+                self.notifyDisplayCaptureSettled()
             } catch {
                 self.isRecording = false
                 self.isStartingRecording = false
                 self.recordingOverlay?.dismiss()
                 self.recordingOverlay = nil
                 self.logDebug("record start failed: \(error.localizedDescription)")
+                self.notifyDisplayCaptureSettled()
                 self.postNotification(title: "Umbrella Helper", body: "Could not start recording: \(error.localizedDescription)")
             }
         }
@@ -279,6 +285,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         recordingOverlay = nil
         Task { await screenRecorder.cancelRecording() }
         logDebug("record: pending start cancelled")
+        notifyDisplayCaptureSettled()
     }
 
     private func finishRecording() {
@@ -298,6 +305,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 guard let url = try await screenRecorder.stopRecording() else {
                     isRecording = false
                     logDebug("record stop: no file saved")
+                    notifyDisplayCaptureSettled()
                     return
                 }
                 isRecording = false
@@ -308,6 +316,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                     microphoneState = Self.microphoneState(from: AVCaptureDevice.authorizationStatus(for: .audio))
                 }
                 logDebug("record saved: \(url.lastPathComponent)")
+                notifyDisplayCaptureSettled()
                 postNotification(title: "Umbrella Helper", body: "Saved recording \(url.lastPathComponent)")
                 if revealRecordingInFinder {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -315,6 +324,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             } catch {
                 isRecording = false
                 logDebug("record stop failed: \(error.localizedDescription)")
+                notifyDisplayCaptureSettled()
                 postNotification(title: "Umbrella Helper", body: "Recording failed: \(error.localizedDescription)")
             }
         }
@@ -334,6 +344,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             onCancel: { [weak self] in
                 self?.windowSelector = nil
                 self?.logDebug("snip: window selection cancelled")
+                self?.notifyDisplayCaptureSettled()
             }
         )
         windowSelector = selector
@@ -361,6 +372,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             onCancel: { [weak self] in
                 self?.areaSelector = nil
                 self?.logDebug("snip: selection cancelled")
+                self?.notifyDisplayCaptureSettled()
             }
         )
         areaSelector = selector
@@ -371,6 +383,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         let output = screenshotOutputPath()
         captureSelectionRegion(selection, outputPath: output, compressed: true) { [weak self] success in
             guard let self else { return }
+            self.notifyDisplayCaptureSettled()
             if success {
                 self.screenCaptureState = .allowed
                 self.lastSavedPath = output
@@ -402,6 +415,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         let output = textCaptureOutputPath()
         captureSelectionRegion(selection, outputPath: output, compressed: false) { [weak self] success in
             guard let self else { return }
+            self.notifyDisplayCaptureSettled()
             if success {
                 self.screenCaptureState = .allowed
                 self.extractTextToClipboard(from: output)
@@ -492,6 +506,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             Task { @MainActor in
                 guard let self else { return }
+                self.notifyDisplayCaptureSettled()
                 let fileExists = FileManager.default.fileExists(atPath: outputPath)
                 self.logDebug("snip exit=\(task.terminationStatus) file=\(fileExists ? "yes" : "no")\(stderr.isEmpty ? "" : " stderr=\(stderr)")")
                 if task.terminationStatus == 0, fileExists {
@@ -521,6 +536,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             try process.run()
         } catch {
             logDebug("snip launch error: \(error.localizedDescription)")
+            notifyDisplayCaptureSettled()
             postNotification(title: "Umbrella Helper", body: "Capture failed: \(error.localizedDescription)")
         }
     }
@@ -537,6 +553,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             Task { @MainActor in
                 guard let self else { return }
+                self.notifyDisplayCaptureSettled()
                 let fileExists = FileManager.default.fileExists(atPath: outputPath)
                 self.logDebug("text exit=\(task.terminationStatus) file=\(fileExists ? "yes" : "no")\(stderr.isEmpty ? "" : " stderr=\(stderr)")")
                 if task.terminationStatus == 0, fileExists {
@@ -556,6 +573,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             try process.run()
         } catch {
             logDebug("text launch error: \(error.localizedDescription)")
+            notifyDisplayCaptureSettled()
             postNotification(title: "Umbrella Helper", body: "Text capture failed: \(error.localizedDescription)")
         }
     }
@@ -758,6 +776,10 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         // CGPreflight/CGRequest can be stale on some macOS builds.
         // Allow screencapture to run so macOS can evaluate real-time TCC state.
         return false
+    }
+
+    private func notifyDisplayCaptureSettled() {
+        onDisplayCaptureSettled?()
     }
 
     func logDebug(_ message: String) {

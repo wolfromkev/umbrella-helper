@@ -12,3 +12,4 @@
 - Notion token in Keychain; database ID in UserDefaults
 - NeewerLite via `http://localhost:18486` (exact light name `NEEWER-GL1 PRO`)
 - Film Mode dirty-flag: unclean exit restores gamma and leaves Film Mode off
+- Auto brightness follows a sine curve (night floor → midday peak → night) between sunrise/sunset; twilight minutes pad the rise/fall; location can replace manual sun times

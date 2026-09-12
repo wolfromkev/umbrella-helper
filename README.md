@@ -10,7 +10,7 @@ A native macOS menu bar app for quick Notion tasks, screen capture/recording, di
 
 - **Notion quick task:** global hotkey (default `F4`) opens a compact task popup
 - **SimpleSnip:** area / window / full-screen screenshots, area recording, and OCR text copy
-- **Brightness:** warmth + brightness controls, presets, Film Mode (dims external displays), optional auto schedule
+- **Brightness:** warmth + brightness controls, presets, Film Mode (dims external displays), and an optional daytime curve (dim at night, peak at midday) with manual or location-based sunrise/sunset
 - **Neewer light:** menu-bar controls for a NeewerLite-connected light (localhost API)
 - **Menu bar:** click for controls; right-click for Settings / Restart / Quit
 - **Launch at login** and customizable global hotkeys

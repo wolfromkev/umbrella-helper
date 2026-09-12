@@ -527,6 +527,9 @@ private struct BrightnessTabView: View {
                         get: { feature.isAutoMode },
                         set: { feature.setAutoMode($0) }
                     ))
+                    Text("Follows a daytime curve: dim at night, brightest at midday, then dim again toward sunset. Dragging a slider turns this off.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("Blue Light Removal", isOn: Binding(
                         get: { feature.isDarkroom },
                         set: { feature.setDarkroom($0) }
@@ -542,11 +545,6 @@ private struct BrightnessTabView: View {
                     Text("Dims external monitors; leaves the built-in MacBook display unchanged.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Toggle("Use location schedule", isOn: Binding(
-                        get: { feature.useLocationSchedule },
-                        set: { feature.setUseLocationSchedule($0) }
-                    ))
-
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Brightness: \(Int(feature.brightness * 100))%")
                         Slider(
@@ -583,6 +581,39 @@ private struct BrightnessTabView: View {
                 }
 
                 section("Schedule") {
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        let now = minutesFrom(date: context.date)
+                        VStack(alignment: .leading, spacing: 8) {
+                            UmbrellaDayCurveView(
+                                sunriseMinutes: feature.sunriseMinutes,
+                                sunsetMinutes: feature.sunsetMinutes,
+                                transitionMinutes: feature.transitionMinutes,
+                                nowMinutes: now
+                            )
+                            Text(UmbrellaSolarSchedule.statusText(
+                                at: now,
+                                sunrise: feature.sunriseMinutes,
+                                sunset: feature.sunsetMinutes,
+                                transition: feature.transitionMinutes
+                            ))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            Text(scheduleAnchorsLabel)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+
+                    Toggle("Use location for sunrise and sunset", isOn: Binding(
+                        get: { feature.useLocationSchedule },
+                        set: { feature.setUseLocationSchedule($0) }
+                    ))
+                    if feature.useLocationSchedule {
+                        Text(feature.locationName ?? "Finding sunrise and sunset…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     HStack(spacing: 16) {
                         DatePicker(
                             "Sunrise",
@@ -601,9 +632,10 @@ private struct BrightnessTabView: View {
                             displayedComponents: .hourAndMinute
                         )
                     }
+                    .disabled(feature.useLocationSchedule)
 
                     HStack {
-                        Text("Transition minutes")
+                        Text("Twilight")
                         Stepper(
                             value: Binding(
                                 get: { feature.transitionMinutes },
@@ -612,9 +644,12 @@ private struct BrightnessTabView: View {
                             in: 15...240,
                             step: 5
                         ) {
-                            Text("\(feature.transitionMinutes)")
+                            Text("\(feature.transitionMinutes) min")
                         }
                     }
+                    Text("How early brightness starts rising before sunrise, and how long it keeps falling after sunset.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     HStack(spacing: 12) {
                         Picker("Day preset", selection: Binding(
@@ -640,12 +675,9 @@ private struct BrightnessTabView: View {
                             }
                         }
                     }
-
-                    if feature.useLocationSchedule {
-                        Text(feature.locationName ?? "Using system location")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Night is the dim floor. Day is the midday peak. Warmth follows the same curve.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 section("Presets") {
@@ -780,7 +812,19 @@ private struct BrightnessTabView: View {
     }
 
     private func minutesFrom(date: Date) -> Int {
-        Calendar.current.component(.hour, from: date) * 60 + Calendar.current.component(.minute, from: date)
+        UmbrellaSolarSchedule.minutesOfDay(from: date)
+    }
+
+    private var scheduleAnchorsLabel: String {
+        let midday = UmbrellaSolarSchedule.middayMinutes(
+            sunrise: feature.sunriseMinutes,
+            sunset: feature.sunsetMinutes
+        )
+        return "Sunrise \(timeLabel(minutes: feature.sunriseMinutes)) · Midday \(timeLabel(minutes: midday)) · Sunset \(timeLabel(minutes: feature.sunsetMinutes))"
+    }
+
+    private func timeLabel(minutes: Int) -> String {
+        dateFrom(minutes: minutes).formatted(date: .omitted, time: .shortened)
     }
 
     @ViewBuilder
