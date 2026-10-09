@@ -22,3 +22,5 @@ Local-only data (never in git):
 | Neewer state/config | `~/.config/karabiner/neewer-light-*.json` |
 
 Forks that distribute their own build should change `PRODUCT_BUNDLE_IDENTIFIER` and set `UMBRELLA_SIGN_IDENTITY` when installing.
+
+`install.sh` signs with a stable keychain identity so privacy permissions survive rebuilds. It prefers `UMBRELLA_SIGN_IDENTITY`, then the identity saved in `.signing-identity`, then Apple Development. Ad-hoc signing is only the fallback when no certificate is available.

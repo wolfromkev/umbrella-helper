@@ -37,7 +37,7 @@ Or build, install, and relaunch:
 ./build-and-install.sh
 ```
 
-The script builds a Release app, copies it to `/Applications/Umbrella Helper.app`, and uses ad-hoc code signing. On first launch, macOS may block an unsigned build — right-click the app → **Open**, or allow it in **Privacy & Security**.
+The script builds a Release app, copies it to `/Applications/Umbrella Helper.app`, and signs it with a stable certificate from your keychain (Apple Development, or `UMBRELLA_SIGN_IDENTITY` if you set one). That keeps Screen Recording, Microphone, and Accessibility granted across rebuilds. The first launch after switching off ad-hoc signing asks for those permissions once.
 
 ## First-time setup
 

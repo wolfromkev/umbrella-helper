@@ -173,6 +173,9 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     private var pendingApplyWorkItem: DispatchWorkItem?
     private var screenChangeWorkItem: DispatchWorkItem?
     private var followUpReapplyWorkItem: DispatchWorkItem?
+    /// Delayed LUT restores after a snip. Kept separate so a screen-parameter
+    /// notification cannot cancel the later pulses.
+    private var captureReapplyWorkItems: [DispatchWorkItem] = []
     private var needsPersist = false
     private var lastSolarComputationDay: Int?
     private let locationProvider = UmbrellaLocationProvider()
@@ -188,8 +191,9 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     private static let applyThrottleInterval: TimeInterval = 0.05
     /// Wait for display reconnect / wake to settle before re-applying gamma.
     private static let screenChangeDebounceInterval: TimeInterval = 0.35
-    /// `screencapture` / WindowServer often reset the LUT again after the process exits.
-    private static let captureReapplyDelay: TimeInterval = 0.45
+    /// WindowServer and ColorSync often reset the LUT again after the selector
+    /// appears and after `screencapture` exits. Pulse until that settles.
+    private static let captureReapplyDelays: [TimeInterval] = [0.2, 0.55, 1.1, 2.0]
     /// Second pass after ColorSync / screen-parameter clobbers.
     private static let followUpReapplyDelay: TimeInterval = 0.6
 
@@ -309,6 +313,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         screenChangeWorkItem = nil
         followUpReapplyWorkItem?.cancel()
         followUpReapplyWorkItem = nil
+        cancelCaptureReapplyPulses()
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
             self.screenChangeObserver = nil
@@ -362,16 +367,32 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         screenChangeWorkItem = nil
         followUpReapplyWorkItem?.cancel()
         followUpReapplyWorkItem = nil
+        cancelCaptureReapplyPulses()
         UmbrellaBlueLightManager.reset()
         apply(persist: true, immediate: true)
     }
 
-    /// Screen capture and ColorSync often wipe `CGSetDisplayTransferByFormula`.
-    /// Call after a snip/record so brightness/warmth/Film Mode come back.
+    /// Screen capture and the snip selector often wipe `CGSetDisplayTransferByFormula`.
+    /// Re-apply the current brightness immediately, then again while WindowServer settles.
     func reapplyGammaAfterDisplayCapture() {
         screenChangeWorkItem?.cancel()
+        screenChangeWorkItem = nil
+        followUpReapplyWorkItem?.cancel()
+        followUpReapplyWorkItem = nil
+        cancelCaptureReapplyPulses()
         apply(persist: false, immediate: true)
-        scheduleFollowUpReapply(after: Self.captureReapplyDelay)
+        for delay in Self.captureReapplyDelays {
+            let work = DispatchWorkItem { [weak self] in
+                self?.apply(persist: false, immediate: true)
+            }
+            captureReapplyWorkItems.append(work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        }
+    }
+
+    private func cancelCaptureReapplyPulses() {
+        captureReapplyWorkItems.forEach { $0.cancel() }
+        captureReapplyWorkItems.removeAll()
     }
 
     func setDarkroom(_ enabled: Bool) {

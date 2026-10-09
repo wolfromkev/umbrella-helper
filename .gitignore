@@ -23,6 +23,10 @@ DerivedData/
 .env
 *.pem
 
+# Local codesigning identity chosen by install.sh. Not a key — just which
+# keychain certificate to keep using so TCC grants survive rebuilds.
+.signing-identity
+
 # Local Cursor / agent files — not part of the public product
 .cursor/
 .cursorignore

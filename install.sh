@@ -8,6 +8,71 @@ APP_NAME="Umbrella Helper"
 BUILD_DIR="$ROOT/build"
 DERIVED="$BUILD_DIR/DerivedData"
 INSTALL_DIR="${1:-/Applications}"
+IDENTITY_FILE="$ROOT/.signing-identity"
+
+# Pick a codesigning identity whose designated requirement stays the same
+# across rebuilds. Remember the choice so a later certificate does not
+# silently replace it and reset TCC.
+resolve_sign_identity() {
+  local identities saved name
+  identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+
+  identity_is_valid() {
+    printf '%s\n' "$identities" | grep -F -q "\"$1\""
+  }
+
+  if [[ -n "${UMBRELLA_SIGN_IDENTITY:-}" ]]; then
+    if identity_is_valid "$UMBRELLA_SIGN_IDENTITY"; then
+      printf '%s\n' "$UMBRELLA_SIGN_IDENTITY"
+      return 0
+    fi
+    echo "Warning: UMBRELLA_SIGN_IDENTITY is not a valid codesigning identity: ${UMBRELLA_SIGN_IDENTITY}" >&2
+    return 1
+  fi
+
+  if [[ -f "$IDENTITY_FILE" ]]; then
+    saved="$(tr -d '\n' < "$IDENTITY_FILE")"
+    if [[ -n "$saved" ]] && identity_is_valid "$saved"; then
+      printf '%s\n' "$saved"
+      return 0
+    fi
+  fi
+
+  name="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -n 1)"
+  if [[ -z "$name" ]]; then
+    name="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Mac Developer:[^"]*\)".*/\1/p' | head -n 1)"
+  fi
+  if [[ -z "$name" ]]; then
+    name="$(printf '%s\n' "$identities" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -n 1)"
+  fi
+  if [[ -n "$name" ]]; then
+    printf '%s\n' "$name"
+    return 0
+  fi
+  return 1
+}
+
+sign_installed_app() {
+  local target="$1"
+  local identity entitlements
+  entitlements="$ROOT/UmbrellaHelper/UmbrellaHelper.entitlements"
+
+  if ! identity="$(resolve_sign_identity)"; then
+    echo "Warning: no stable codesigning identity found. Leaving the ad-hoc signature, so macOS will ask for Screen Recording, Microphone, and Accessibility again after the next rebuild." >&2
+    echo "Install an Apple Development certificate in Xcode, or set UMBRELLA_SIGN_IDENTITY." >&2
+    return 0
+  fi
+
+  printf '%s\n' "$identity" > "$IDENTITY_FILE"
+  echo "Signing with stable identity: $identity"
+  codesign --force --deep --options runtime \
+    --entitlements "$entitlements" \
+    --identifier "com.kevinwolfrom.umbrella" \
+    --sign "$identity" \
+    "$target"
+  codesign --verify --deep --strict "$target"
+  codesign -dv "$target" 2>&1 | awk -F= '/^TeamIdentifier=|^Signature=/{ print }'
+}
 
 echo "Building ${APP_NAME}..."
 # Prefer full Xcode (beta or stable) over Command Line Tools when present.
@@ -37,28 +102,9 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "$TARGET"
 ditto "$BUILT_APP" "$TARGET"
 
-# Re-sign with a stable identity when UMBRELLA_SIGN_IDENTITY is set so TCC
-# grants (Screen Recording, Microphone) survive rebuilds. Ad-hoc signatures
-# change their code hash every build, which makes macOS drop the grant.
-SIGN_IDENTITY="${UMBRELLA_SIGN_IDENTITY:-}"
-ENTITLEMENTS="$ROOT/UmbrellaHelper/UmbrellaHelper.entitlements"
-if [[ -n "$SIGN_IDENTITY" ]] && security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGN_IDENTITY"; then
-  echo "Re-signing with stable identity: $SIGN_IDENTITY"
-  codesign --force --deep --options runtime \
-    --entitlements "$ENTITLEMENTS" \
-    --identifier "com.kevinwolfrom.umbrella" \
-    --sign "$SIGN_IDENTITY" \
-    "$TARGET"
-  codesign --verify --deep --strict --verbose=2 "$TARGET" || {
-    echo "Warning: code signature verification reported issues." >&2
-  }
-else
-  if [[ -n "$SIGN_IDENTITY" ]]; then
-    echo "Warning: UMBRELLA_SIGN_IDENTITY not found in the keychain; leaving ad-hoc signature." >&2
-  else
-    echo "Leaving ad-hoc signature. Set UMBRELLA_SIGN_IDENTITY to keep TCC grants across rebuilds." >&2
-  fi
-fi
+# Ad-hoc signatures change every build, so macOS drops Screen Recording,
+# Microphone, and Accessibility. A stable keychain identity keeps those grants.
+sign_installed_app "$TARGET"
 
 echo "Done. Open Settings to configure shortcuts and features."
 echo "Installed: $TARGET"

@@ -42,7 +42,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     @Published private(set) var microphoneState: UmbrellaPermissionState
     @Published private(set) var debugLog: [String] = []
 
-    /// Screen capture resets display gamma tables; brightness re-applies after this.
+    /// Screen capture and the selection overlay reset display gamma; brightness re-applies after this.
     var onDisplayCaptureSettled: (() -> Void)?
 
     private let defaults = UserDefaults.standard
@@ -181,6 +181,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         )
         areaSelector = selector
         selector.present()
+        notifyDisplayCaptureSettled()
     }
 
     private func prewarmShareableContent() {
@@ -349,6 +350,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         )
         windowSelector = selector
         selector.present()
+        notifyDisplayCaptureSettled()
     }
 
     private func presentAreaSelector(preferTextCopy: Bool = false) {
@@ -377,6 +379,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         )
         areaSelector = selector
         selector.present()
+        notifyDisplayCaptureSettled()
     }
 
     private func finishImageSnip(selection: CGRect) {

@@ -9,6 +9,7 @@
 
 ## Decisions
 - Localhost-only personal tool — no cloud backend
+- Local installs sign with a stable keychain identity so Screen Recording, Microphone, and Accessibility survive rebuilds
 - Notion token in Keychain; database ID in UserDefaults
 - NeewerLite via `http://localhost:18486` (exact light name `NEEWER-GL1 PRO`)
 - Film Mode dirty-flag: unclean exit restores gamma and leaves Film Mode off
