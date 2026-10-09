@@ -35,11 +35,8 @@ final class AppModel: ObservableObject {
     private let filmModeHotKey = GlobalHotKey(registrationID: 14)
     private var sunPresetHotKeys: [String: GlobalHotKey] = [:]
     private var nextSunPresetHotKeyID: UInt32 = 200
-    private var neewerPresetHotKeys: [String: GlobalHotKey] = [:]
-    private var nextNeewerPresetHotKeyID: UInt32 = 300
     let brightnessFeature = UmbrellaBrightnessFeature()
     let simpleSnipFeature = UmbrellaSimpleSnipFeature()
-    let neewerLightFeature = UmbrellaNeewerLightFeature()
 
     var notionTaskHasKeyboardFocus: Bool {
         notionTaskPanelController.hasKeyboardFocus
@@ -54,7 +51,6 @@ final class AppModel: ObservableObject {
             self?.brightnessFeature.reapplyGammaAfterDisplayCapture()
         }
         simpleSnipFeature.start()
-        neewerLightFeature.start()
         reloadHotKeys()
 
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
@@ -83,14 +79,11 @@ final class AppModel: ObservableObject {
         filmModeHotKey.unregister()
         sunPresetHotKeys.values.forEach { $0.unregister() }
         sunPresetHotKeys.removeAll()
-        neewerPresetHotKeys.values.forEach { $0.unregister() }
-        neewerPresetHotKeys.removeAll()
         settingsPanelController.closePanel()
         notionTaskPanelController.closePanel()
         simpleSnipFeature.onDisplayCaptureSettled = nil
         brightnessFeature.stop()
         simpleSnipFeature.stop()
-        neewerLightFeature.stop()
     }
 
     func reloadHotKeys() {
@@ -132,7 +125,6 @@ final class AppModel: ObservableObject {
             filmModeHotKey.unregister()
         }
         reloadSunPresetHotKeys()
-        reloadNeewerPresetHotKeys()
     }
 
     func reloadSunPresetHotKeys() {
@@ -152,26 +144,6 @@ final class AppModel: ObservableObject {
                 }
             }
             sunPresetHotKeys[preset.id] = hotKey
-        }
-    }
-
-    func reloadNeewerPresetHotKeys() {
-        neewerPresetHotKeys.values.forEach { $0.unregister() }
-        neewerPresetHotKeys.removeAll()
-        nextNeewerPresetHotKeyID = 300
-
-        for preset in neewerLightFeature.presets {
-            guard let binding = settings.neewerPresetHotKeys[preset.id] else { continue }
-            let id = nextNeewerPresetHotKeyID
-            nextNeewerPresetHotKeyID += 1
-            let hotKey = GlobalHotKey(registrationID: id)
-            hotKey.register(hotKeyID: binding) { [weak self] in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.neewerLightFeature.applyPreset(id: preset.id)
-                }
-            }
-            neewerPresetHotKeys[preset.id] = hotKey
         }
     }
 

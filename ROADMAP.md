@@ -1,6 +1,6 @@
 # ROADMAP
 
-**What:** macOS menu-bar helper for Notion tasks, SimpleSnip, display brightness/Film Mode, and NeewerLite lights.
+**What:** macOS menu-bar helper for Notion tasks, SimpleSnip, and display brightness/Film Mode.
 
 ## Next
 1. Optional: split SimpleSnip overlays/recorder out of `UmbrellaSimpleSnipFeature.swift`
@@ -11,6 +11,5 @@
 - Localhost-only personal tool — no cloud backend
 - Local installs sign with a stable keychain identity so Screen Recording, Microphone, and Accessibility survive rebuilds
 - Notion token in Keychain; database ID in UserDefaults
-- NeewerLite via `http://localhost:18486` (exact light name `NEEWER-GL1 PRO`)
 - Film Mode dirty-flag: unclean exit restores gamma and leaves Film Mode off
 - Auto brightness follows a sine curve (night floor → midday peak → night) between sunrise/sunset; twilight minutes pad the rise/fall; location can replace manual sun times

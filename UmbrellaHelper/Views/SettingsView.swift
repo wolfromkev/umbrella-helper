@@ -4,7 +4,6 @@ import SwiftUI
 private enum UmbrellaSettingsTab: Hashable {
     case keybindings
     case brightness
-    case neewerLight
     case simpleSnip
     case notionPopup
 }
@@ -22,7 +21,6 @@ private enum KeybindingTarget: Hashable {
     case warmthDown
     case filmMode
     case sunPreset(String)
-    case neewerPreset(String)
 }
 
 struct SettingsView: View {
@@ -42,7 +40,6 @@ struct SettingsView: View {
     @State private var warmthDownHotKey = AppSettings.shared.warmthDownHotKey
     @State private var filmModeHotKey = AppSettings.shared.filmModeHotKey
     @State private var sunPresetHotKeys = AppSettings.shared.sunScreenPresetHotKeys
-    @State private var neewerPresetHotKeys = AppSettings.shared.neewerPresetHotKeys
     @State private var recordingTarget: KeybindingTarget?
     @State private var shortcutConflict: String?
 
@@ -68,16 +65,6 @@ struct SettingsView: View {
             )
             .tabItem { Text("Brightness") }
             .tag(UmbrellaSettingsTab.brightness)
-
-            NeewerLightTabView(
-                feature: appModel.neewerLightFeature,
-                onPresetsChanged: {
-                    refreshPresetBindings()
-                    appModel.reloadNeewerPresetHotKeys()
-                }
-            )
-            .tabItem { Text("Neewer Light") }
-            .tag(UmbrellaSettingsTab.neewerLight)
 
             SimpleSnipTabView(feature: appModel.simpleSnipFeature)
                 .tabItem { Text("SimpleSnip") }
@@ -111,17 +98,6 @@ struct SettingsView: View {
                     editableBindingRow("New Notion task", target: .notionTask)
                 }
 
-                sectionCard("Neewer light control") {
-                    readOnlyBindingRow("Toggle light", value: "Hyper + F1")
-                    readOnlyBindingRow("Brightness down", value: "Hyper + F9")
-                    readOnlyBindingRow("Brightness up", value: "Hyper + F10")
-                    readOnlyBindingRow("Warmth up", value: "Hyper + F11")
-                    readOnlyBindingRow("Warmth down", value: "Hyper + F12")
-                    Text("Managed in Karabiner. Umbrella Helper shows these bindings for reference only.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 sectionCard("SunScreen") {
                     editableBindingRow("Brightness down", target: .brightnessDown)
                     editableBindingRow("Brightness up", target: .brightnessUp)
@@ -133,18 +109,6 @@ struct SettingsView: View {
 
                     ForEach(appModel.brightnessFeature.presets) { preset in
                         editableBindingRow("Preset: \(preset.name)", target: .sunPreset(preset.id))
-                    }
-                }
-
-                sectionCard("Neewer Light presets") {
-                    if appModel.neewerLightFeature.presets.isEmpty {
-                        Text("Add presets in the Neewer Light tab, then bind them here.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(appModel.neewerLightFeature.presets) { preset in
-                            editableBindingRow("Preset: \(preset.name)", target: .neewerPreset(preset.id))
-                        }
                     }
                 }
 
@@ -247,17 +211,6 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func readOnlyBindingRow(_ title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private func binding(for target: KeybindingTarget) -> Binding<HotKeyBinding?> {
         Binding<HotKeyBinding?>(
             get: {
@@ -274,7 +227,6 @@ struct SettingsView: View {
                 case .warmthDown: return warmthDownHotKey
                 case .filmMode: return filmModeHotKey
                 case .sunPreset(let id): return sunPresetHotKeys[id]
-                case .neewerPreset(let id): return neewerPresetHotKeys[id]
                 }
             },
             set: { newValue in
@@ -322,9 +274,6 @@ struct SettingsView: View {
         case .sunPreset(let id):
             sunPresetHotKeys[id] = binding
             AppSettings.shared.sunScreenPresetHotKeys = sunPresetHotKeys
-        case .neewerPreset(let id):
-            neewerPresetHotKeys[id] = binding
-            AppSettings.shared.neewerPresetHotKeys = neewerPresetHotKeys
         }
         recordingTarget = nil
         appModel.reloadHotKeys()
@@ -369,9 +318,6 @@ struct SettingsView: View {
         case .sunPreset(let id):
             sunPresetHotKeys.removeValue(forKey: id)
             AppSettings.shared.sunScreenPresetHotKeys = sunPresetHotKeys
-        case .neewerPreset(let id):
-            neewerPresetHotKeys.removeValue(forKey: id)
-            AppSettings.shared.neewerPresetHotKeys = neewerPresetHotKeys
         }
         appModel.reloadHotKeys()
         detectShortcutConflict()
@@ -383,8 +329,6 @@ struct SettingsView: View {
             return filmModeHotKey != nil
         case .sunPreset(let id):
             return sunPresetHotKeys[id] != nil
-        case .neewerPreset(let id):
-            return neewerPresetHotKeys[id] != nil
         default:
             return true
         }
@@ -410,10 +354,6 @@ struct SettingsView: View {
             guard let binding = sunPresetHotKeys[preset.id] else { return nil }
             return ("SunScreen: \(preset.name)", binding)
         }
-        all += appModel.neewerLightFeature.presets.compactMap { preset in
-            guard let binding = neewerPresetHotKeys[preset.id] else { return nil }
-            return ("Neewer: \(preset.name)", binding)
-        }
 
         var map: [String: [String]] = [:]
         for (label, binding) in all {
@@ -432,12 +372,6 @@ struct SettingsView: View {
         sunCurrent = sunCurrent.filter { sunValidIDs.contains($0.key) }
         AppSettings.shared.sunScreenPresetHotKeys = sunCurrent
         sunPresetHotKeys = sunCurrent
-
-        var neewerCurrent = AppSettings.shared.neewerPresetHotKeys
-        let neewerValidIDs = Set(appModel.neewerLightFeature.presets.map(\.id))
-        neewerCurrent = neewerCurrent.filter { neewerValidIDs.contains($0.key) }
-        AppSettings.shared.neewerPresetHotKeys = neewerCurrent
-        neewerPresetHotKeys = neewerCurrent
 
         detectShortcutConflict()
     }
@@ -825,237 +759,6 @@ private struct BrightnessTabView: View {
 
     private func timeLabel(minutes: Int) -> String {
         dateFrom(minutes: minutes).formatted(date: .omitted, time: .shortened)
-    }
-
-    @ViewBuilder
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.headline)
-            content()
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: NSColor.controlBackgroundColor))
-        )
-    }
-}
-
-private struct NeewerLightTabView: View {
-    @ObservedObject var feature: UmbrellaNeewerLightFeature
-    var onPresetsChanged: () -> Void
-    @State private var newPresetName = ""
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                section("Light") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Brightness: \(feature.brightness)%")
-                        Slider(
-                            value: Binding(
-                                get: { Double(feature.brightness) },
-                                set: { feature.setBrightness(Int($0.rounded())) }
-                            ),
-                            in: Double(UmbrellaNeewerLightFeature.minBrightness)...Double(UmbrellaNeewerLightFeature.maxBrightness),
-                            step: 1
-                        ) { editing in
-                            if !editing { feature.flushPendingApply() }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Warmth: \(feature.kelvin)K")
-                        Slider(
-                            value: Binding(
-                                get: { Double(feature.kelvin) },
-                                set: { feature.setKelvin(Int($0.rounded())) }
-                            ),
-                            in: Double(UmbrellaNeewerLightFeature.minKelvin)...Double(UmbrellaNeewerLightFeature.maxKelvin),
-                            step: Double(UmbrellaNeewerLightFeature.kelvinStep)
-                        ) { editing in
-                            if !editing { feature.flushPendingApply() }
-                        }
-                    }
-
-                    HStack {
-                        if let statusMessage = feature.statusMessage {
-                            Text(statusMessage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Refresh") { feature.refreshCurrentValuesFromDisk() }
-                    }
-                }
-
-                section("Power on after restart") {
-                    Picker("Restore", selection: Binding(
-                        get: { feature.powerOnMode },
-                        set: { feature.setPowerOnMode($0) }
-                    )) {
-                        ForEach(UmbrellaNeewerPowerOnMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(feature.powerOnMode.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("Applies only the first time you turn the light on after a Mac restart. Later toggles keep whatever the light was last set to.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                section("Default values") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Brightness: \(feature.defaultBrightness)%")
-                        Slider(
-                            value: Binding(
-                                get: { Double(feature.defaultBrightness) },
-                                set: { feature.setDefaultBrightness(Int($0.rounded())) }
-                            ),
-                            in: Double(UmbrellaNeewerLightFeature.minBrightness)...Double(UmbrellaNeewerLightFeature.maxBrightness),
-                            step: 1
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Warmth: \(feature.defaultKelvin)K")
-                        Slider(
-                            value: Binding(
-                                get: { Double(feature.defaultKelvin) },
-                                set: { feature.setDefaultKelvin(Int($0.rounded())) }
-                            ),
-                            in: Double(UmbrellaNeewerLightFeature.minKelvin)...Double(UmbrellaNeewerLightFeature.maxKelvin),
-                            step: Double(UmbrellaNeewerLightFeature.kelvinStep)
-                        )
-                    }
-
-                    HStack {
-                        Spacer()
-                        Button("Apply defaults now") { feature.applyDefaultsNow() }
-                            .disabled(feature.isBusy)
-                    }
-                }
-
-                section("Presets") {
-                    Text("Star up to \(UmbrellaNeewerLightFeature.maxMenuBarFavorites) presets to show them in the menu bar Light section.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        TextField("Preset name", text: $newPresetName)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 220)
-                        Button("Add preset") {
-                            feature.addPreset(name: newPresetName)
-                            newPresetName = ""
-                            onPresetsChanged()
-                        }
-                    }
-
-                    Text("New presets start from the current Light brightness and warmth. Bind shortcuts in Keybindings.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(feature.presets) { preset in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Button {
-                                    _ = feature.toggleMenuBarFavorite(preset.id)
-                                } label: {
-                                    Image(systemName: feature.isMenuBarFavorite(preset.id) ? "star.fill" : "star")
-                                        .foregroundStyle(feature.isMenuBarFavorite(preset.id) ? Color.yellow : Color.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help(
-                                    feature.isMenuBarFavorite(preset.id)
-                                        ? "Remove from menu bar"
-                                        : feature.menuBarFavoriteIDs.count >= UmbrellaNeewerLightFeature.maxMenuBarFavorites
-                                            ? "Already starring \(UmbrellaNeewerLightFeature.maxMenuBarFavorites) presets"
-                                            : "Show in menu bar"
-                                )
-                                .disabled(
-                                    !feature.isMenuBarFavorite(preset.id)
-                                        && feature.menuBarFavoriteIDs.count >= UmbrellaNeewerLightFeature.maxMenuBarFavorites
-                                )
-
-                                TextField("Name", text: Binding(
-                                    get: { preset.name },
-                                    set: {
-                                        var updated = preset
-                                        updated.name = $0
-                                        feature.updatePreset(updated)
-                                        onPresetsChanged()
-                                    }
-                                ))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 200)
-
-                                Button("Apply") { feature.applyPreset(id: preset.id) }
-                                    .disabled(feature.isBusy)
-                                Button("Delete") {
-                                    feature.removePreset(preset.id)
-                                    onPresetsChanged()
-                                }
-                                .foregroundStyle(.red)
-                            }
-
-                            HStack {
-                                Text("Brightness \(preset.brightness)%")
-                                    .frame(width: 120, alignment: .leading)
-                                Slider(
-                                    value: Binding(
-                                        get: { Double(preset.brightness) },
-                                        set: {
-                                            var updated = preset
-                                            updated.brightness = Int($0.rounded())
-                                            feature.updatePreset(updated)
-                                        }
-                                    ),
-                                    in: Double(UmbrellaNeewerLightFeature.minBrightness)...Double(UmbrellaNeewerLightFeature.maxBrightness),
-                                    step: 1
-                                )
-                            }
-
-                            HStack {
-                                Text("Warmth \(preset.kelvin)K")
-                                    .frame(width: 120, alignment: .leading)
-                                Slider(
-                                    value: Binding(
-                                        get: { Double(preset.kelvin) },
-                                        set: {
-                                            var updated = preset
-                                            updated.kelvin = Int($0.rounded())
-                                            feature.updatePreset(updated)
-                                        }
-                                    ),
-                                    in: Double(UmbrellaNeewerLightFeature.minKelvin)...Double(UmbrellaNeewerLightFeature.maxKelvin),
-                                    step: Double(UmbrellaNeewerLightFeature.kelvinStep)
-                                )
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
-                section("Shortcuts") {
-                    Text("Toggle / brightness / warmth stay in Karabiner (Hyper + F1 / F9–F12). Preset shortcuts are set under Keybindings → Neewer Light presets.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
-        }
-        .onAppear {
-            feature.refreshCurrentValuesFromDisk()
-        }
     }
 
     @ViewBuilder

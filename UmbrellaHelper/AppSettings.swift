@@ -204,7 +204,6 @@ final class AppSettings {
         static let warmthDownHotKey = "warmthDownHotKey"
         static let filmModeHotKey = "filmModeHotKey"
         static let sunScreenPresetHotKeys = "sunScreenPresetHotKeys"
-        static let neewerPresetHotKeys = "neewerPresetHotKeys"
         static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
         static let showMenuBarIcon = showMenuBarIconKey
@@ -420,23 +419,6 @@ final class AppSettings {
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Keys.sunScreenPresetHotKeys)
-            }
-        }
-    }
-
-    var neewerPresetHotKeys: [String: HotKeyBinding] {
-        get {
-            guard
-                let data = UserDefaults.standard.data(forKey: Keys.neewerPresetHotKeys),
-                let bindings = try? JSONDecoder().decode([String: HotKeyBinding].self, from: data)
-            else {
-                return [:]
-            }
-            return bindings
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: Keys.neewerPresetHotKeys)
             }
         }
     }

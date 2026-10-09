@@ -4,13 +4,10 @@ import SwiftUI
 private enum MenuBarControlTarget: CaseIterable, Hashable {
     case screenBrightness
     case screenWarmth
-    case lightBrightness
-    case lightWarmth
 }
 
 struct MenuBarControlsView: View {
     @ObservedObject var brightnessFeature: UmbrellaBrightnessFeature
-    @ObservedObject var neewerFeature: UmbrellaNeewerLightFeature
     var onOpenSettings: () -> Void
 
     @State private var focusedControl: MenuBarControlTarget = .screenBrightness
@@ -108,84 +105,6 @@ struct MenuBarControlsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .help("Reset system display color, then re-apply Umbrella brightness settings.")
-            }
-
-            Divider()
-
-            sectionHeader("Light", systemImage: "lightbulb.fill") {
-                if !neewerFeature.menuBarFavoritePresets.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(neewerFeature.menuBarFavoritePresets) { preset in
-                            Button(preset.name) {
-                                neewerFeature.applyPreset(id: preset.id)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .disabled(!neewerFeature.hasSyncedFromLight || neewerFeature.isBusy)
-                            .help("\(preset.brightness)% · \(preset.kelvin)K")
-                        }
-                    }
-                }
-
-                Toggle(
-                    "Power",
-                    isOn: Binding(
-                        get: { neewerFeature.isPoweredOn },
-                        set: { neewerFeature.setPoweredOn($0) }
-                    )
-                )
-                .toggleStyle(.switch)
-                .disabled(!neewerFeature.hasSyncedFromLight)
-                .controlSize(.small)
-
-                labeledSlider(
-                    target: .lightBrightness,
-                    title: "Brightness",
-                    valueText: neewerFeature.hasSyncedFromLight ? "\(neewerFeature.brightness)%" : "…",
-                    value: Binding(
-                        get: { Double(neewerFeature.brightness) },
-                        set: { neewerFeature.setBrightness(Int($0.rounded())) }
-                    ),
-                    range: Double(UmbrellaNeewerLightFeature.minBrightness)...Double(UmbrellaNeewerLightFeature.maxBrightness),
-                    step: 1,
-                    enabled: neewerFeature.hasSyncedFromLight,
-                    onEditingChanged: { editing in
-                        if !editing { neewerFeature.flushPendingApply() }
-                    }
-                )
-
-                labeledSlider(
-                    target: .lightWarmth,
-                    title: "Warmth",
-                    valueText: neewerFeature.hasSyncedFromLight ? "\(neewerFeature.kelvin)K" : "…",
-                    value: Binding(
-                        get: { Double(neewerFeature.kelvin) },
-                        set: { neewerFeature.setKelvin(Int($0.rounded())) }
-                    ),
-                    range: Double(UmbrellaNeewerLightFeature.minKelvin)...Double(UmbrellaNeewerLightFeature.maxKelvin),
-                    step: Double(UmbrellaNeewerLightFeature.kelvinStep),
-                    enabled: neewerFeature.hasSyncedFromLight,
-                    onEditingChanged: { editing in
-                        if !editing { neewerFeature.flushPendingApply() }
-                    }
-                )
-
-                Group {
-                    if neewerFeature.isSyncingFromLight {
-                        Text("Reading current light level…")
-                    } else if !neewerFeature.isReachable {
-                        Text("NeewerLite isn’t reachable")
-                    } else if let status = neewerFeature.statusMessage {
-                        Text(status)
-                    } else {
-                        Text("\(neewerFeature.brightness)% · \(neewerFeature.kelvin)K")
-                    }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: 14)
             }
 
             Divider()
@@ -291,12 +210,6 @@ struct MenuBarControlsView: View {
     }
 
     private func handleControlEvent(_ event: NSEvent) -> Bool {
-        // Don't nudge Neewer controls until we've read the live level.
-        if !neewerFeature.hasSyncedFromLight,
-           focusedControl == .lightBrightness || focusedControl == .lightWarmth {
-            return false
-        }
-
         switch event.type {
         case .keyDown:
             return handleKeyDown(event)
@@ -382,14 +295,6 @@ struct MenuBarControlsView: View {
         let total = steps * multiplier
 
         switch focusedControl {
-        case .lightBrightness:
-            neewerFeature.setBrightness(neewerFeature.brightness + total)
-            neewerFeature.flushPendingApply()
-        case .lightWarmth:
-            neewerFeature.setKelvin(
-                neewerFeature.kelvin + (total * UmbrellaNeewerLightFeature.kelvinStep)
-            )
-            neewerFeature.flushPendingApply()
         case .screenBrightness:
             brightnessFeature.setBrightness(
                 brightnessFeature.brightness + Float(total) * UmbrellaBrightnessFeature.brightnessStep

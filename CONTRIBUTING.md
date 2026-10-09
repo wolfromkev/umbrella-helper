@@ -15,7 +15,7 @@ Open `UmbrellaHelper.xcodeproj` in Xcode for debugging. Read `AGENTS.md` and `RO
 ## Pull requests
 
 - Keep changes focused; match existing Swift and SwiftUI style.
-- Test on macOS 14+: Notion popup, snip/record, brightness/Film Mode, Neewer menu controls (if NeewerLite is running).
+- Test on macOS 14+: Notion popup, snip/record, and brightness/Film Mode.
 - Do not commit tokens, database IDs, or personal paths.
 
 ## Before publishing forks

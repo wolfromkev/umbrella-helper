@@ -18,7 +18,6 @@
 		B10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* AppModel.swift */; };
 		B10000000000000000000040 /* UmbrellaBrightnessFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */; };
 		B10000000000000000000043 /* UmbrellaSolarSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000043 /* UmbrellaSolarSchedule.swift */; };
-		B10000000000000000000041 /* UmbrellaNeewerLightFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */; };
 		B10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */; };
 		B10000000000000000000003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* AppSettings.swift */; };
 		B10000000000000000000007 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000007 /* GlobalHotKey.swift */; };
@@ -43,7 +42,6 @@
 		F10000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaBrightnessFeature.swift; sourceTree = "<group>"; };
 		F10000000000000000000043 /* UmbrellaSolarSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaSolarSchedule.swift; sourceTree = "<group>"; };
-		F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaNeewerLightFeature.swift; sourceTree = "<group>"; };
 		F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UmbrellaSimpleSnipFeature.swift; sourceTree = "<group>"; };
 		F10000000000000000000003 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		F10000000000000000000004 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
@@ -95,7 +93,6 @@
 			children = (
 				F10000000000000000000040 /* UmbrellaBrightnessFeature.swift */,
 				F10000000000000000000043 /* UmbrellaSolarSchedule.swift */,
-				F10000000000000000000041 /* UmbrellaNeewerLightFeature.swift */,
 				F10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift */,
 			);
 			path = Features;
@@ -244,7 +241,6 @@
 				B10000000000000000000002 /* AppModel.swift in Sources */,
 				B10000000000000000000040 /* UmbrellaBrightnessFeature.swift in Sources */,
 				B10000000000000000000043 /* UmbrellaSolarSchedule.swift in Sources */,
-				B10000000000000000000041 /* UmbrellaNeewerLightFeature.swift in Sources */,
 				B10000000000000000000042 /* UmbrellaSimpleSnipFeature.swift in Sources */,
 				B10000000000000000000003 /* AppSettings.swift in Sources */,
 				B10000000000000000000007 /* GlobalHotKey.swift in Sources */,

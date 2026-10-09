@@ -115,15 +115,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             return
         }
 
-        // Show immediately from disk/cache; refresh NeewerLite in the background.
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.isHighlighted = true
         NSApp.activate(ignoringOtherApps: true)
         startOutsideClickMonitoring()
-
-        Task { @MainActor in
-            _ = await appModel.neewerLightFeature.refreshFromAPI()
-        }
     }
 
     private func hidePopover() {
@@ -139,7 +134,6 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         let content = MenuBarControlsView(
             brightnessFeature: appModel.brightnessFeature,
-            neewerFeature: appModel.neewerLightFeature,
             onOpenSettings: { [weak self] in
                 self?.hidePopover()
                 self?.openSettings()
