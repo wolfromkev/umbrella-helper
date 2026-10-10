@@ -7,16 +7,14 @@
 
 ## Verify
 - Build in Xcode (scheme **UmbrellaHelper**), or `./build-and-install.sh`
-- Manual smoke: Notion popup, area snip, menu-bar brightness, Film Mode toggle + quit restore
+- Manual smoke: area snip, menu-bar brightness, Film Mode toggle + quit restore
 
 ## Layout
-- `UmbrellaHelper/AppModel.swift` — app shell, hotkeys, Notion panel orchestration
+- `UmbrellaHelper/AppModel.swift` — app shell, hotkeys, feature ownership
 - `UmbrellaHelper/Features/` — Brightness, SimpleSnip (+ recorder/overlays)
-- `UmbrellaHelper/Services/` — Keychain, Notion API, panels, menu bar
-- `UmbrellaHelper/Views/` — Settings, Notion UI, menu controls
+- `UmbrellaHelper/Services/` — panels, menu bar, permissions
+- `UmbrellaHelper/Views/` — Settings and menu controls
 
 ## Anti-patterns
 - Do not put Cursor `agent` CLI / chat flows back without updating README + ROADMAP
-- Do not delete Keychain items before a successful write/read-back
-- Do not dismiss the Notion panel before create succeeds (keep draft on failure)
 - Prefer splitting Features further over growing `AppModel.swift` again

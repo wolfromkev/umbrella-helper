@@ -8,7 +8,9 @@ private enum MenuBarControlTarget: CaseIterable, Hashable {
 
 struct MenuBarControlsView: View {
     @ObservedObject var brightnessFeature: UmbrellaBrightnessFeature
+    @ObservedObject var snipFeature: UmbrellaSimpleSnipFeature
     var onOpenSettings: () -> Void
+    var onRunCapture: (@escaping () -> Void) -> Void
 
     @State private var focusedControl: MenuBarControlTarget = .screenBrightness
     @State private var scrollCarry: CGFloat = 0
@@ -109,6 +111,30 @@ struct MenuBarControlsView: View {
 
             Divider()
 
+            sectionHeader("SimpleSnip", systemImage: "record.circle") {
+                captureRow("Snip area", shortcut: AppSettings.shared.snipAreaHotKey.displayName) {
+                    snipFeature.takeAreaSnip()
+                }
+                captureRow("Snip window", shortcut: AppSettings.shared.snipWindowHotKey.displayName) {
+                    snipFeature.takeWindowSnip()
+                }
+                captureRow("Snip full screen", shortcut: AppSettings.shared.snipFullScreenHotKey.displayName) {
+                    snipFeature.takeFullScreenSnip()
+                }
+                captureRow("Copy text", shortcut: AppSettings.shared.snipTextHotKey.displayName) {
+                    snipFeature.copyTextFromAreaSnip()
+                }
+                captureRow(
+                    snipFeature.isRecording ? "Stop recording" : "Record area",
+                    shortcut: AppSettings.shared.snipRecordHotKey.displayName,
+                    emphasized: snipFeature.isRecording
+                ) {
+                    snipFeature.toggleRecording()
+                }
+            }
+
+            Divider()
+
             HStack(alignment: .firstTextBaseline) {
                 Button(action: onOpenSettings) {
                     Label("Settings…", systemImage: "gearshape")
@@ -147,6 +173,30 @@ struct MenuBarControlsView: View {
 
             content()
         }
+    }
+
+    private func captureRow(
+        _ title: String,
+        shortcut: String,
+        emphasized: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            onRunCapture(action)
+        } label: {
+            HStack(spacing: 8) {
+                Text(title)
+                Spacer(minLength: 8)
+                Text(shortcut)
+                    .foregroundStyle(emphasized ? Color.red.opacity(0.85) : Color.secondary)
+            }
+            .font(.caption)
+            .foregroundStyle(emphasized ? Color.red : Color.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(title) — \(shortcut)")
     }
 
     private func presetHelp(_ preset: UmbrellaSunPreset) -> String {

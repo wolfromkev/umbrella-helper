@@ -27,9 +27,7 @@ echo ""
 PATTERNS=(
   '/Users/[^/[:space:]"'\''`]+'
   'secret_[A-Za-z0-9]{20,}'
-  'ntn_[A-Za-z0-9]{20,}'
   'sk-[A-Za-z0-9]{20,}'
-  'notion\.so/[a-f0-9]{32}'
   'Cursor Chat'
   'project-obsidian-vault'
 )

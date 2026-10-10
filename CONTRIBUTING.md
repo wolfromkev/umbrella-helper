@@ -15,8 +15,8 @@ Open `UmbrellaHelper.xcodeproj` in Xcode for debugging. Read `AGENTS.md` and `RO
 ## Pull requests
 
 - Keep changes focused; match existing Swift and SwiftUI style.
-- Test on macOS 14+: Notion popup, snip/record, and brightness/Film Mode.
-- Do not commit tokens, database IDs, or personal paths.
+- Test on macOS 14+: snip/record and brightness/Film Mode.
+- Do not commit tokens or personal paths.
 
 ## Before publishing forks
 

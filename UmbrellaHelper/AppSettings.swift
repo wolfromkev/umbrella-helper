@@ -5,11 +5,6 @@ struct HotKeyBinding: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
 
-    static let notionTaskDefault = HotKeyBinding(
-        keyCode: UInt32(kVK_F4),
-        modifiers: 0
-    )
-
     static let snipAreaDefault = HotKeyBinding(
         keyCode: UInt32(kVK_ANSI_S),
         modifiers: UInt32(cmdKey | shiftKey)
@@ -192,7 +187,6 @@ final class AppSettings {
     static let showMenuBarIconKey = "showMenuBarIcon"
 
     private enum Keys {
-        static let notionTaskHotKey = "notionTaskHotKey"
         static let snipAreaHotKey = "snipAreaHotKey"
         static let snipWindowHotKey = "snipWindowHotKey"
         static let snipFullScreenHotKey = "snipFullScreenHotKey"
@@ -204,7 +198,6 @@ final class AppSettings {
         static let warmthDownHotKey = "warmthDownHotKey"
         static let filmModeHotKey = "filmModeHotKey"
         static let sunScreenPresetHotKeys = "sunScreenPresetHotKeys"
-        static let notionDatabaseID = "notionDatabaseID"
         static let launchAtLogin = "launchAtLogin"
         static let showMenuBarIcon = showMenuBarIconKey
         static let permissionsAutomationDone = "permissionsAutomationDone"
@@ -213,26 +206,6 @@ final class AppSettings {
 
     static let permissionsAutomationDoneKey = Keys.permissionsAutomationDone
     static let permissionsLoginItemsDoneKey = Keys.permissionsLoginItemsDone
-
-    static let defaultNotionDatabaseID = ""
-    static let notionDefaultStatus = "Not started"
-
-    var notionTaskHotKey: HotKeyBinding {
-        get {
-            guard
-                let data = UserDefaults.standard.data(forKey: Keys.notionTaskHotKey),
-                let binding = try? JSONDecoder().decode(HotKeyBinding.self, from: data)
-            else {
-                return .notionTaskDefault
-            }
-            return binding
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: Keys.notionTaskHotKey)
-            }
-        }
-    }
 
     var snipAreaHotKey: HotKeyBinding {
         get {
@@ -420,15 +393,6 @@ final class AppSettings {
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: Keys.sunScreenPresetHotKeys)
             }
-        }
-    }
-
-    var notionDatabaseID: String {
-        get {
-            UserDefaults.standard.string(forKey: Keys.notionDatabaseID) ?? Self.defaultNotionDatabaseID
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Keys.notionDatabaseID)
         }
     }
 

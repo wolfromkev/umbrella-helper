@@ -5,11 +5,9 @@ private enum UmbrellaSettingsTab: Hashable {
     case keybindings
     case brightness
     case simpleSnip
-    case notionPopup
 }
 
 private enum KeybindingTarget: Hashable {
-    case notionTask
     case snipArea
     case snipWindow
     case snipFullScreen
@@ -28,7 +26,6 @@ struct SettingsView: View {
     @State private var selectedTab: UmbrellaSettingsTab = .keybindings
     @State private var launchAtLogin = AppSettings.shared.launchAtLogin
 
-    @State private var notionTaskHotKey = AppSettings.shared.notionTaskHotKey
     @State private var snipAreaHotKey = AppSettings.shared.snipAreaHotKey
     @State private var snipWindowHotKey = AppSettings.shared.snipWindowHotKey
     @State private var snipFullScreenHotKey = AppSettings.shared.snipFullScreenHotKey
@@ -42,13 +39,6 @@ struct SettingsView: View {
     @State private var sunPresetHotKeys = AppSettings.shared.sunScreenPresetHotKeys
     @State private var recordingTarget: KeybindingTarget?
     @State private var shortcutConflict: String?
-
-    @State private var savedNotionToken = KeychainStorage.notionToken ?? ""
-    @State private var savedNotionDatabaseID = AppSettings.shared.notionDatabaseID
-    @State private var isEditingNotionCredentials = false
-    @State private var notionTokenDraft = ""
-    @State private var notionDatabaseIDDraft = ""
-    @State private var notionCredentialError: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -69,16 +59,11 @@ struct SettingsView: View {
             SimpleSnipTabView(feature: appModel.simpleSnipFeature)
                 .tabItem { Text("SimpleSnip") }
                 .tag(UmbrellaSettingsTab.simpleSnip)
-
-            notionPopupTab
-                .tabItem { Text("Notion Pop-up") }
-                .tag(UmbrellaSettingsTab.notionPopup)
         }
         .padding(16)
         .onAppear {
             launchAtLogin = LaunchAtLoginManager.isEnabled
             refreshPresetBindings()
-            reloadNotionCredentials()
             detectShortcutConflict()
         }
     }
@@ -86,16 +71,20 @@ struct SettingsView: View {
     private var keybindingsTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                sectionCard("General") {
+                    Toggle("Launch at login", isOn: $launchAtLogin)
+                        .onChange(of: launchAtLogin) { _, enabled in
+                            AppSettings.shared.launchAtLogin = enabled
+                            LaunchAtLoginManager.setEnabled(enabled)
+                        }
+                }
+
                 sectionCard("SimpleSnip") {
                     editableBindingRow("Snip area", target: .snipArea)
                     editableBindingRow("Snip window", target: .snipWindow)
                     editableBindingRow("Snip full screen", target: .snipFullScreen)
                     editableBindingRow("Record area / Stop recording", target: .snipRecord)
                     editableBindingRow("Copy text from area", target: .snipText)
-                }
-
-                sectionCard("Notion Pop-up") {
-                    editableBindingRow("New Notion task", target: .notionTask)
                 }
 
                 sectionCard("SunScreen") {
@@ -116,72 +105,6 @@ struct SettingsView: View {
                     Text(shortcutConflict)
                         .font(.caption)
                         .foregroundStyle(.red)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
-        }
-    }
-
-    private var notionPopupTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                sectionCard("Notion") {
-                    row(label: "Integration token") {
-                        if isEditingNotionCredentials {
-                            SecureField("Secret", text: $notionTokenDraft)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 320)
-                        } else {
-                            Text(maskedNotionToken(savedNotionToken))
-                                .foregroundStyle(savedNotionToken.isEmpty ? .orange : .secondary)
-                                .textSelection(.enabled)
-                                .frame(width: 320, alignment: .leading)
-                        }
-                    }
-
-                    row(label: "Database ID") {
-                        if isEditingNotionCredentials {
-                            TextField("Database ID", text: $notionDatabaseIDDraft)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 320)
-                        } else {
-                            Text(savedNotionDatabaseID)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .textSelection(.enabled)
-                                .frame(width: 320, alignment: .leading)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        if isEditingNotionCredentials {
-                            Button("Save") { saveNotionCredentials() }
-                                .disabled(!notionCredentialsCanSave)
-                            Button("Cancel") { cancelEditingNotionCredentials() }
-                        } else {
-                            Button("Edit credentials…") { beginEditingNotionCredentials() }
-                        }
-                    }
-
-                    if let notionCredentialError {
-                        Text(notionCredentialError)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                sectionCard("Behavior") {
-                    row(label: "Launch at login") {
-                        Toggle("", isOn: $launchAtLogin)
-                            .labelsHidden()
-                            .onChange(of: launchAtLogin) { _, enabled in
-                                AppSettings.shared.launchAtLogin = enabled
-                                LaunchAtLoginManager.setEnabled(enabled)
-                            }
-                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -215,7 +138,6 @@ struct SettingsView: View {
         Binding<HotKeyBinding?>(
             get: {
                 switch target {
-                case .notionTask: return notionTaskHotKey
                 case .snipArea: return snipAreaHotKey
                 case .snipWindow: return snipWindowHotKey
                 case .snipFullScreen: return snipFullScreenHotKey
@@ -238,9 +160,6 @@ struct SettingsView: View {
 
     private func commitHotKey(_ binding: HotKeyBinding, for target: KeybindingTarget) {
         switch target {
-        case .notionTask:
-            notionTaskHotKey = binding
-            AppSettings.shared.notionTaskHotKey = binding
         case .snipArea:
             snipAreaHotKey = binding
             AppSettings.shared.snipAreaHotKey = binding
@@ -282,9 +201,6 @@ struct SettingsView: View {
 
     private func clearHotKey(for target: KeybindingTarget) {
         switch target {
-        case .notionTask:
-            notionTaskHotKey = .notionTaskDefault
-            AppSettings.shared.notionTaskHotKey = .notionTaskDefault
         case .snipArea:
             snipAreaHotKey = .snipAreaDefault
             AppSettings.shared.snipAreaHotKey = .snipAreaDefault
@@ -336,7 +252,6 @@ struct SettingsView: View {
 
     private func detectShortcutConflict() {
         var all: [(String, HotKeyBinding)] = [
-            ("Notion task", notionTaskHotKey),
             ("Snip area", snipAreaHotKey),
             ("Snip window", snipWindowHotKey),
             ("Snip full screen", snipFullScreenHotKey),
@@ -376,52 +291,6 @@ struct SettingsView: View {
         detectShortcutConflict()
     }
 
-    private func maskedNotionToken(_ token: String) -> String {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "Not set" }
-        guard trimmed.count > 8 else { return String(repeating: "•", count: trimmed.count) }
-        let suffix = trimmed.suffix(4)
-        return "\(String(repeating: "•", count: max(4, trimmed.count - 4)))\(suffix)"
-    }
-
-    private var notionCredentialsCanSave: Bool {
-        !notionTokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !notionDatabaseIDDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func reloadNotionCredentials() {
-        savedNotionToken = KeychainStorage.notionToken ?? ""
-        savedNotionDatabaseID = AppSettings.shared.notionDatabaseID
-    }
-
-    private func beginEditingNotionCredentials() {
-        notionTokenDraft = savedNotionToken
-        notionDatabaseIDDraft = savedNotionDatabaseID
-        notionCredentialError = nil
-        isEditingNotionCredentials = true
-    }
-
-    private func cancelEditingNotionCredentials() {
-        notionTokenDraft = savedNotionToken
-        notionDatabaseIDDraft = savedNotionDatabaseID
-        notionCredentialError = nil
-        isEditingNotionCredentials = false
-    }
-
-    private func saveNotionCredentials() {
-        let token = notionTokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let databaseID = notionDatabaseIDDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty, !databaseID.isEmpty else { return }
-        guard KeychainStorage.storeNotionToken(token) else {
-            notionCredentialError = "Couldn’t save the Notion token to Keychain. Try again."
-            return
-        }
-        AppSettings.shared.notionDatabaseID = databaseID
-        notionCredentialError = nil
-        isEditingNotionCredentials = false
-        reloadNotionCredentials()
-    }
-
     @ViewBuilder
     private func sectionCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -435,16 +304,6 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(nsColor: NSColor.controlBackgroundColor))
         )
-    }
-
-    @ViewBuilder
-    private func row<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .center) {
-            Text(label)
-                .frame(width: 130, alignment: .leading)
-            content()
-            Spacer()
-        }
     }
 }
 

@@ -115,6 +115,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             return
         }
 
+        if let hosting = popover.contentViewController as? NSHostingController<MenuBarControlsView> {
+            hosting.rootView = makeControlsView(appModel: appModel)
+        }
+
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.isHighlighted = true
         NSApp.activate(ignoringOtherApps: true)
@@ -127,18 +131,27 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         statusItem?.button?.isHighlighted = false
     }
 
+    private func makeControlsView(appModel: AppModel) -> MenuBarControlsView {
+        MenuBarControlsView(
+            brightnessFeature: appModel.brightnessFeature,
+            snipFeature: appModel.simpleSnipFeature,
+            onOpenSettings: { [weak self] in
+                self?.hidePopover()
+                self?.openSettings()
+            },
+            onRunCapture: { [weak self] action in
+                self?.hidePopover()
+                action()
+            }
+        )
+    }
+
     private func ensurePopover(appModel: AppModel) -> NSPopover {
         if let popover {
             return popover
         }
 
-        let content = MenuBarControlsView(
-            brightnessFeature: appModel.brightnessFeature,
-            onOpenSettings: { [weak self] in
-                self?.hidePopover()
-                self?.openSettings()
-            }
-        )
+        let content = makeControlsView(appModel: appModel)
 
         let hosting = NSHostingController(rootView: content)
         hosting.sizingOptions = [.intrinsicContentSize]
