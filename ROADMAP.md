@@ -5,7 +5,7 @@
 ## Next
 1. Optional: split SimpleSnip overlays/recorder out of `UmbrellaSimpleSnipFeature.swift`
 2. Optional: wire automated `xcodebuild` once full Xcode is available in CI
-3. Optional: notarized release packaging (see `docs/PUBLISHING.md`)
+3. Optional: notarize the GitHub DMG so the first open does not need a right-click (see `docs/PUBLISHING.md`)
 
 ## Decisions
 - Localhost-only personal tool — no cloud backend

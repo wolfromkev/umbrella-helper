@@ -38,6 +38,7 @@ SEARCH_PATHS=(
   LICENSE
   install.sh
   build-and-install.sh
+  make-dmg.sh
   UmbrellaHelper
   docs
 )

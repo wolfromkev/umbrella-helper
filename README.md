@@ -16,9 +16,26 @@ A native macOS menu bar app for screen capture/recording and display warmth/brig
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Xcode 27 (or Xcode 26 on macOS Tahoe) to build from source
 
 ## Install
+
+Download the disk image. You do not need Xcode.
+
+**[Download Umbrella Helper](https://github.com/wolfromkev/umbrella-helper/releases/latest/download/Umbrella-Helper.dmg)**
+
+1. Open the DMG and drag **Umbrella Helper** onto Applications.
+2. Right-click **Umbrella Helper** in Applications and choose **Open**, then **Open** again. macOS blocks this download the first time because it is not notarized.
+3. If macOS says the app is damaged, open Terminal and run:
+
+```bash
+xattr -cr "/Applications/Umbrella Helper.app"
+```
+
+Then right-click the app and choose **Open** again.
+
+## Build from source
+
+Requires Xcode 27 (or Xcode 26 on macOS Tahoe).
 
 ```bash
 git clone https://github.com/wolfromkev/umbrella-helper.git
