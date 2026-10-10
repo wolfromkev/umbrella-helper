@@ -45,7 +45,7 @@ final class SettingsPanelController: NSObject, NSWindowDelegate {
 
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: contentSize),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                styleMask: [.titled, .closable, .resizable],
                 backing: .buffered,
                 defer: false
             )

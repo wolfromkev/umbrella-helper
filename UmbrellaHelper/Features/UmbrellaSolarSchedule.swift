@@ -328,6 +328,9 @@ final class UmbrellaLocationProvider: NSObject, CLLocationManagerDelegate {
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async { [weak self] in
             self?.manager.requestWhenInUseAuthorization()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NSApp.setActivationPolicy(.accessory)
+            }
         }
     }
 

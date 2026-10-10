@@ -31,6 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appModel.start()
         menuBarController.start(appModel: appModel)
         dismissAutoOpenedSettingsWindows()
+        // SwiftUI can flip the policy back to a regular app after launch.
+        DispatchQueue.main.async {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func dismissAutoOpenedSettingsWindows() {
