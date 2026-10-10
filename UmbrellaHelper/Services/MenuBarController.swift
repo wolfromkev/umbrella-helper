@@ -65,7 +65,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(menuItem("Settings…", action: #selector(openSettings)))
+        #if !APP_STORE
         menu.addItem(menuItem("Check for Updates…", action: #selector(checkForUpdates)))
+        #endif
         menu.addItem(.separator())
         menu.addItem(menuItem("Restart", action: #selector(restartApp)))
 
@@ -81,9 +83,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         return item
     }
 
+    #if !APP_STORE
     @objc private func checkForUpdates() {
         AppUpdateChecker.prompt()
     }
+    #endif
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else {

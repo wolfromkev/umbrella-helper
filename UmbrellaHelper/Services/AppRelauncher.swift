@@ -3,6 +3,19 @@ import Foundation
 
 enum AppRelauncher {
     static func restart(onFailure: ((String) -> Void)? = nil) {
+        #if APP_STORE
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            DispatchQueue.main.async {
+                if let error {
+                    onFailure?(error.localizedDescription)
+                    return
+                }
+                NSApp.terminate(nil)
+            }
+        }
+        #else
         let appPath = Bundle.main.bundlePath
 
         let task = Process()
@@ -20,5 +33,6 @@ enum AppRelauncher {
         } catch {
             onFailure?(error.localizedDescription)
         }
+        #endif
     }
 }

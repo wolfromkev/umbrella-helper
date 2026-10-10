@@ -58,8 +58,37 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     private var isStartingRecording = false
     private var requestedScreenPermissionThisSession = false
     private var shareableContentPrewarmTask: Task<Void, Never>?
+    #if APP_STORE
+    private var screenshotAccessURL: URL?
+    private var recordingAccessURL: URL?
+    #endif
 
     init() {
+        #if APP_STORE
+        let screenshots = Self.defaultStoreScreenshotFolder()
+        let recordings = Self.defaultStoreRecordingFolder()
+        var staleBookmarks: [(URL, String)] = []
+        if let data = defaults.data(forKey: Self.screenshotBookmarkKey),
+           let resolved = Self.resolveSecurityScopedBookmark(data) {
+            screenshotFolderPath = resolved.url.path
+            screenshotAccessURL = resolved.url
+            if resolved.stale {
+                staleBookmarks.append((resolved.url, Self.screenshotBookmarkKey))
+            }
+        } else {
+            screenshotFolderPath = screenshots
+        }
+        if let data = defaults.data(forKey: Self.recordingBookmarkKey),
+           let resolved = Self.resolveSecurityScopedBookmark(data) {
+            recordingFolderPath = resolved.url.path
+            recordingAccessURL = resolved.url
+            if resolved.stale {
+                staleBookmarks.append((resolved.url, Self.recordingBookmarkKey))
+            }
+        } else {
+            recordingFolderPath = recordings
+        }
+        #else
         let screenshots = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Screenshots")
             .path
@@ -69,6 +98,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             .path
         screenshotFolderPath = defaults.string(forKey: "umbrella.snip.screenshotFolder") ?? screenshots
         recordingFolderPath = defaults.string(forKey: "umbrella.snip.recordingFolder") ?? recordings
+        #endif
         revealScreenshotInFinder = defaults.object(forKey: "umbrella.snip.revealScreenshot") as? Bool ?? false
         revealRecordingInFinder = defaults.object(forKey: "umbrella.snip.revealRecording") as? Bool ?? false
         recordSystemAudio = defaults.object(forKey: "umbrella.snip.recordSystemAudio") as? Bool ?? true
@@ -91,6 +121,11 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         lastSavedPath = defaults.string(forKey: "umbrella.snip.lastSavedPath")
         screenCaptureState = CGPreflightScreenCaptureAccess() ? .allowed : .notRequested
         microphoneState = Self.microphoneState(from: AVCaptureDevice.authorizationStatus(for: .audio))
+        #if APP_STORE
+        for (url, key) in staleBookmarks {
+            persistSecurityScopedBookmark(url, key: key)
+        }
+        #endif
     }
 
     func start() {
@@ -140,17 +175,21 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     }
 
     func chooseScreenshotFolder() {
-        if let path = chooseFolder(message: "Choose a folder for screenshots") {
-            screenshotFolderPath = path
-            saveSettings()
-        }
+        guard let url = chooseFolder(message: "Choose a folder for screenshots") else { return }
+        #if APP_STORE
+        adoptSecurityScopedFolder(url, bookmarkKey: Self.screenshotBookmarkKey, access: &screenshotAccessURL)
+        #endif
+        screenshotFolderPath = url.path
+        saveSettings()
     }
 
     func chooseRecordingFolder() {
-        if let path = chooseFolder(message: "Choose a folder for recordings") {
-            recordingFolderPath = path
-            saveSettings()
-        }
+        guard let url = chooseFolder(message: "Choose a folder for recordings") else { return }
+        #if APP_STORE
+        adoptSecurityScopedFolder(url, bookmarkKey: Self.recordingBookmarkKey, access: &recordingAccessURL)
+        #endif
+        recordingFolderPath = url.path
+        saveSettings()
     }
 
     func openScreenshotFolder() {
@@ -176,8 +215,14 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
 
     func takeFullScreenSnip() {
         _ = ensureScreenCaptureAccess()
+        #if APP_STORE
+        let screen = UmbrellaScreenCoordinateSpace.mainScreen ?? NSScreen.main
+        guard let frame = screen?.frame else { return }
+        finishImageSnip(selection: frame)
+        #else
         let output = screenshotOutputPath()
         runScreencapture(arguments: ["-x", "-t", "jpg", output], outputPath: output, reveal: revealScreenshotInFinder)
+        #endif
     }
 
     func copyTextFromAreaSnip() {
@@ -496,6 +541,12 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 }
             }
 
+            #if APP_STORE
+            await MainActor.run { [weak self] in
+                self?.logDebug("snip capture: in-app capture failed")
+                completion(false)
+            }
+            #else
             let args = UmbrellaScreenCoordinateSpace.screencaptureRegionArguments(for: selection, outputPath: outputPath)
             await MainActor.run { [weak self] in
                 self?.logDebug("snip capture fallback: screencapture \(args.joined(separator: " "))")
@@ -528,9 +579,11 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                     completion(false)
                 }
             }
+            #endif
         }
     }
 
+    #if !APP_STORE
     private static func screencaptureRegionArguments(for selection: CGRect, outputPath: String) -> [String] {
         UmbrellaScreenCoordinateSpace.screencaptureRegionArguments(for: selection, outputPath: outputPath)
     }
@@ -619,6 +672,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
             postNotification(title: "Umbrella Helper", body: "Text capture failed: \(error.localizedDescription)")
         }
     }
+    #endif
 
     private func screenshotOutputPath() -> String {
         ensureDirectory(screenshotFolderPath)
@@ -637,7 +691,7 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         return URL(fileURLWithPath: recordingFolderPath).appendingPathComponent(name).path
     }
 
-    private func chooseFolder(message: String) -> String? {
+    private func chooseFolder(message: String) -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -646,8 +700,55 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         panel.message = message
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        return url.path
+        return url
     }
+
+    #if APP_STORE
+    private static let screenshotBookmarkKey = "umbrella.snip.screenshotFolderBookmark"
+    private static let recordingBookmarkKey = "umbrella.snip.recordingFolderBookmark"
+
+    private static func defaultStoreScreenshotFolder() -> String {
+        let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return pictures.appendingPathComponent("Umbrella Helper", isDirectory: true).path
+    }
+
+    private static func defaultStoreRecordingFolder() -> String {
+        let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return movies.appendingPathComponent("Umbrella Helper Recordings", isDirectory: true).path
+    }
+
+    private static func resolveSecurityScopedBookmark(_ data: Data) -> (url: URL, stale: Bool)? {
+        var stale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: [.withSecurityScope],
+            relativeTo: nil,
+            bookmarkDataIsStale: &stale
+        ), url.startAccessingSecurityScopedResource() else {
+            return nil
+        }
+        return (url, stale)
+    }
+
+    private func persistSecurityScopedBookmark(_ url: URL, key: String) {
+        guard let data = try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        ) else { return }
+        defaults.set(data, forKey: key)
+    }
+
+    private func adoptSecurityScopedFolder(_ url: URL, bookmarkKey: String, access: inout URL?) {
+        access?.stopAccessingSecurityScopedResource()
+        access = nil
+        guard url.startAccessingSecurityScopedResource() else { return }
+        access = url
+        persistSecurityScopedBookmark(url, key: bookmarkKey)
+    }
+    #endif
 
     private func ensureDirectory(_ path: String) {
         try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
@@ -967,6 +1068,7 @@ enum UmbrellaScreenCoordinateSpace {
         return window.convertToScreen(NSRect(origin: pointInView, size: .zero)).origin
     }
 
+    #if !APP_STORE
     static func screencaptureRegionArguments(for selection: CGRect, outputPath: String) -> [String] {
         let cgRect = cgWindowBounds(fromAppKit: NSRect(x: selection.origin.x, y: selection.origin.y, width: selection.width, height: selection.height))
         let x = Int(cgRect.origin.x.rounded())
@@ -980,6 +1082,7 @@ enum UmbrellaScreenCoordinateSpace {
         args.append(outputPath)
         return args
     }
+    #endif
 
     /// Top-left corner of a display in the main-anchored Core Graphics coordinate space.
     static func displayTopLeftCG(for screen: NSScreen) -> CGPoint {

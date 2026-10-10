@@ -33,6 +33,31 @@ gh release create "v<version>" "build/Umbrella-Helper.dmg" \
   --notes "See the README install steps."
 ```
 
-Bump `CFBundleShortVersionString` in `UmbrellaHelper/Info.plist` (and `MARKETING_VERSION` in the Xcode project) before cutting the release. Check for Updates compares that version with the GitHub tag, so a new disk image published under the same version is treated as already installed.
+Bump `MARKETING_VERSION` on the Release configuration before cutting the release. `Info.plist` reads that setting. Check for Updates compares that version with the GitHub tag, so a new disk image published under the same version is treated as already installed.
 
 `./make-dmg.sh` writes `build/Umbrella-Helper.dmg` for that upload, plus a versioned copy next to it. It ad-hoc signs the app so it can launch on a Mac that does not have this machine’s Apple Development certificate. The first open on another Mac still needs the right-click Open step in the README. Notarization needs a Developer ID Application certificate, which this project does not use yet.
+
+## Mac App Store
+
+The `AppStore` configuration is a separate sandboxed build. Release, `install.sh`, and the GitHub disk image stay unsandboxed and keep Check for Updates. Do not install the App Store build over `/Applications` on a machine that uses the GitHub app: both use `com.kevinwolfrom.umbrella`.
+
+Archive with the shared scheme **UmbrellaHelper App Store**. `DEVELOPMENT_TEAM` stays empty in the project; pass the team when signing the archive. [`ExportOptions-AppStore.plist`](../ExportOptions-AppStore.plist) uploads with `method` = `app-store-connect`.
+
+```bash
+xcodebuild -project UmbrellaHelper.xcodeproj \
+  -scheme "UmbrellaHelper App Store" \
+  -configuration AppStore \
+  -archivePath build/UmbrellaHelper-AppStore.xcarchive \
+  DEVELOPMENT_TEAM=RTKZ7MF6UZ \
+  archive
+
+xcodebuild -exportArchive \
+  -archivePath build/UmbrellaHelper-AppStore.xcarchive \
+  -exportPath build/AppStoreExport \
+  -exportOptionsPlist ExportOptions-AppStore.plist \
+  -allowProvisioningUpdates
+```
+
+Create the Mac app in App Store Connect for `com.kevinwolfrom.umbrella` before that export. Until that record exists, export stops with “App record … not found.” Screenshots, the description, privacy answers, and submitting for review stay in App Store Connect.
+
+The store build saves screenshots under Pictures and recordings under Movies until a folder is chosen. Chosen folders are security-scoped bookmarks. It has no GitHub updater. Full-screen snip uses the in-app capture path.

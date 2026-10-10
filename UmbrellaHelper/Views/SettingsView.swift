@@ -81,10 +81,12 @@ struct SettingsView: View {
                     HStack {
                         Text("Version \(AppUpdateChecker.currentVersion)")
                             .foregroundStyle(.secondary)
+                        #if !APP_STORE
                         Spacer()
                         Button("Check for Updates…") {
                             AppUpdateChecker.prompt()
                         }
+                        #endif
                     }
                 }
 

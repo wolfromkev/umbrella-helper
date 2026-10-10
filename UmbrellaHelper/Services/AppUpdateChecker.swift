@@ -4,14 +4,15 @@ import Foundation
 /// Looks up the latest GitHub release and replaces this app with the disk image.
 @MainActor
 enum AppUpdateChecker {
+    static var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    #if !APP_STORE
     private static let owner = "wolfromkev"
     private static let repo = "umbrella-helper"
     private static let assetName = "Umbrella-Helper.dmg"
     private static var isBusy = false
-
-    static var currentVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-    }
 
     static func prompt() {
         guard !isBusy else { return }
@@ -256,8 +257,10 @@ enum AppUpdateChecker {
             case assets
         }
     }
+    #endif
 }
 
+#if !APP_STORE
 private enum UpdateError: LocalizedError {
     case noRelease
     case badResponse
@@ -286,3 +289,4 @@ private enum UpdateError: LocalizedError {
         }
     }
 }
+#endif
