@@ -36,6 +36,9 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
     @Published var revealRecordingInFinder: Bool
     @Published var recordSystemAudio: Bool
     @Published var recordMicrophone: Bool
+    @Published var screenshotSelectionColor: NSColor
+    @Published var recordingSelectionColor: NSColor
+    @Published var textCopySelectionColor: NSColor
     @Published var isRecording = false
     @Published var lastSavedPath: String?
     @Published private(set) var screenCaptureState: UmbrellaPermissionState
@@ -70,6 +73,21 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         revealRecordingInFinder = defaults.object(forKey: "umbrella.snip.revealRecording") as? Bool ?? false
         recordSystemAudio = defaults.object(forKey: "umbrella.snip.recordSystemAudio") as? Bool ?? true
         recordMicrophone = defaults.object(forKey: "umbrella.snip.recordMicrophone") as? Bool ?? false
+        screenshotSelectionColor = Self.storedColor(
+            defaults,
+            key: "umbrella.snip.color.screenshot",
+            fallback: .systemCyan
+        )
+        recordingSelectionColor = Self.storedColor(
+            defaults,
+            key: "umbrella.snip.color.record",
+            fallback: .systemRed
+        )
+        textCopySelectionColor = Self.storedColor(
+            defaults,
+            key: "umbrella.snip.color.text",
+            fallback: .systemGreen
+        )
         lastSavedPath = defaults.string(forKey: "umbrella.snip.lastSavedPath")
         screenCaptureState = CGPreflightScreenCaptureAccess() ? .allowed : .notRequested
         microphoneState = Self.microphoneState(from: AVCaptureDevice.authorizationStatus(for: .audio))
@@ -102,6 +120,23 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         defaults.set(revealRecordingInFinder, forKey: "umbrella.snip.revealRecording")
         defaults.set(recordSystemAudio, forKey: "umbrella.snip.recordSystemAudio")
         defaults.set(recordMicrophone, forKey: "umbrella.snip.recordMicrophone")
+        Self.store(screenshotSelectionColor, defaults: defaults, key: "umbrella.snip.color.screenshot")
+        Self.store(recordingSelectionColor, defaults: defaults, key: "umbrella.snip.color.record")
+        Self.store(textCopySelectionColor, defaults: defaults, key: "umbrella.snip.color.text")
+    }
+
+    private static func storedColor(_ defaults: UserDefaults, key: String, fallback: NSColor) -> NSColor {
+        guard let data = defaults.data(forKey: key),
+              let color = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: data) else {
+            return fallback
+        }
+        return color
+    }
+
+    private static func store(_ color: NSColor, defaults: UserDefaults, key: String) {
+        let stored = color.usingColorSpace(.sRGB) ?? color
+        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: stored, requiringSecureCoding: true) else { return }
+        defaults.set(data, forKey: key)
     }
 
     func chooseScreenshotFolder() {
@@ -166,7 +201,8 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         let selector = UmbrellaAreaSelectionOverlay(
             // Overlay windows use sharingType=.none, so recording can start immediately.
             completionDelay: 0,
-            selectionStrokeColor: .systemRed,
+            primaryTitle: "Screen Record",
+            primaryColor: recordingSelectionColor,
             onComplete: { [weak self] selection, _ in
                 self?.areaSelector = nil
                 self?.beginRecording(selection: selection)
@@ -361,6 +397,9 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
         let selector = UmbrellaAreaSelectionOverlay(
             allowsTextCopy: true,
             initialTextCopy: preferTextCopy,
+            primaryTitle: "Screenshot",
+            primaryColor: screenshotSelectionColor,
+            textCopyColor: textCopySelectionColor,
             onComplete: { [weak self] selection, copyText in
                 guard let self else { return }
                 self.areaSelector = nil
@@ -1225,7 +1264,9 @@ final class UmbrellaAreaSelectionOverlay {
     private let initialTextCopy: Bool
     private let textCopyKeyCode: UInt16
     private let completionDelay: TimeInterval
-    private let selectionStrokeColor: NSColor
+    private let primaryTitle: String
+    private let primaryColor: NSColor
+    private let textCopyColor: NSColor
     private let onComplete: (CGRect, Bool) -> Void
     private let onCancel: () -> Void
 
@@ -1234,7 +1275,9 @@ final class UmbrellaAreaSelectionOverlay {
         initialTextCopy: Bool = false,
         textCopyKeyCode: UInt16 = UInt16(kVK_Tab),
         completionDelay: TimeInterval = 0.12,
-        selectionStrokeColor: NSColor = .systemCyan,
+        primaryTitle: String = "Screenshot",
+        primaryColor: NSColor = .systemCyan,
+        textCopyColor: NSColor = .systemGreen,
         onComplete: @escaping (CGRect, Bool) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -1242,7 +1285,9 @@ final class UmbrellaAreaSelectionOverlay {
         self.initialTextCopy = initialTextCopy
         self.textCopyKeyCode = textCopyKeyCode
         self.completionDelay = completionDelay
-        self.selectionStrokeColor = selectionStrokeColor
+        self.primaryTitle = primaryTitle
+        self.primaryColor = primaryColor
+        self.textCopyColor = textCopyColor
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
@@ -1308,7 +1353,6 @@ final class UmbrellaAreaSelectionOverlay {
         for screen in NSScreen.screens {
             let window = OverlayWindow(screen: screen, selector: self)
             window.selectionRect = currentSelection
-            window.showsTextCopyIndicator = allowsTextCopy && textCopyModeActive
             overlayWindows.append(window)
             window.orderFrontRegardless()
         }
@@ -1384,8 +1428,9 @@ final class UmbrellaAreaSelectionOverlay {
     private func refreshOverlays() {
         for window in overlayWindows {
             window.selectionRect = currentSelection
-            window.showsTextCopyIndicator = allowsTextCopy && textCopyModeActive
-            window.selectionStrokeColor = selectionStrokeColor
+            let copyingText = allowsTextCopy && textCopyModeActive
+            window.modeTitle = copyingText ? "Text copy" : primaryTitle
+            window.modeColor = copyingText ? textCopyColor : primaryColor
             window.contentView?.needsDisplay = true
         }
     }
@@ -1444,8 +1489,8 @@ final class UmbrellaAreaSelectionOverlay {
 
     fileprivate final class OverlayWindow: NSWindow {
         var selectionRect: NSRect = .zero
-        var showsTextCopyIndicator = false
-        var selectionStrokeColor: NSColor = .systemCyan
+        var modeTitle = "Screenshot"
+        var modeColor: NSColor = .systemCyan
         let targetScreen: NSScreen
         private weak var selector: UmbrellaAreaSelectionOverlay?
 
@@ -1536,22 +1581,14 @@ final class UmbrellaAreaSelectionOverlay {
             let path = NSBezierPath(rect: borderRect)
             path.lineWidth = lineWidth
             effectiveAppearance.performAsCurrentDrawingAppearance {
-                // cyan = screenshot, red = video, green = text copy
-                if window.showsTextCopyIndicator {
-                    NSColor.systemGreen.setStroke()
-                } else {
-                    window.selectionStrokeColor.setStroke()
-                }
+                window.modeColor.setStroke()
                 path.stroke()
             }
 
-            if window.showsTextCopyIndicator {
-                drawTextCopyIndicator(near: visible)
-            }
+            drawModeIndicator(window.modeTitle, color: window.modeColor, near: visible)
         }
 
-        private func drawTextCopyIndicator(near selection: NSRect) {
-            let label = "Text copy"
+        private func drawModeIndicator(_ label: String, color: NSColor, near selection: NSRect) {
             let font = NSFont.systemFont(ofSize: 12, weight: .semibold)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -1574,7 +1611,7 @@ final class UmbrellaAreaSelectionOverlay {
             let pillRect = NSRect(origin: pillOrigin, size: pillSize)
             let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 6, yRadius: 6)
             effectiveAppearance.performAsCurrentDrawingAppearance {
-                NSColor.systemGreen.setFill()
+                color.setFill()
                 pillPath.fill()
             }
 

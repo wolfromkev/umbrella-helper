@@ -1,12 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bg" x1="96" y1="64" x2="416" y2="448" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A1A1A"/>
-      <stop offset="1" stop-color="#101010"/>
+    <linearGradient id="bg" x1="40" y1="24" x2="480" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7200"/>
+      <stop offset="1" stop-color="#FF558B"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <polygon points="92,401 190,314 141,361" fill="#FFFFFF" fill-opacity="0.92"/>
-  <polygon points="190,314 330,174 297,141 157,281" fill="#FFFFFF" fill-opacity="0.92"/>
-  <polygon points="330,174 403,101 372,70 297,141" fill="#FFFFFF" fill-opacity="0.92"/>
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+  <g stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="256" cy="220" r="102"/>
+    <path d="M256 92v28M198 112l16 22M314 112l-16 22M154 168h30M328 168h30M176 286l-20 22M336 286l20 22"/>
+    <path d="M232 168l48 92M280 168l-48 92"/>
+    <circle cx="228" cy="286" r="22"/>
+    <circle cx="284" cy="286" r="22"/>
+    <path d="M232 318l-28 62c18 22 86 22 104 0l-28-62"/>
+    <path d="M214 352h84M206 378h100"/>
+  </g>
 </svg>

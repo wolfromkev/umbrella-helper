@@ -1,3 +1,4 @@
+import AppKit
 import CoreLocation
 import SwiftUI
 
@@ -256,6 +257,7 @@ final class UmbrellaLocationProvider: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var isRunning = false
+    private var didRequestPrompt = false
 
     override init() {
         super.init()
@@ -271,7 +273,9 @@ final class UmbrellaLocationProvider: NSObject, CLLocationManagerDelegate {
 
     func stop() {
         isRunning = false
+        didRequestPrompt = false
         manager.stopUpdatingLocation()
+        restoreAccessoryPolicy()
     }
 
     func refresh() {
@@ -305,12 +309,31 @@ final class UmbrellaLocationProvider: NSObject, CLLocationManagerDelegate {
         switch status {
         case .notDetermined:
             onStatus?("Waiting for location permission…")
-            manager.requestWhenInUseAuthorization()
+            presentLocationPrompt()
         case .denied, .restricted:
+            restoreAccessoryPolicy()
             onStatus?("Location permission denied — using manual sunrise and sunset.")
         default:
+            restoreAccessoryPolicy()
             requestFixIfAuthorized()
         }
+    }
+
+    /// Menu-bar apps stay in the background, so macOS will not show the location
+    /// alert until the app is briefly a normal foreground app.
+    private func presentLocationPrompt() {
+        guard !didRequestPrompt else { return }
+        didRequestPrompt = true
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async { [weak self] in
+            self?.manager.requestWhenInUseAuthorization()
+        }
+    }
+
+    private func restoreAccessoryPolicy() {
+        guard NSApp.activationPolicy() != .accessory else { return }
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func requestFixIfAuthorized() {

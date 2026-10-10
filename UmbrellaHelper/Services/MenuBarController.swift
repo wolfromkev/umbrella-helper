@@ -50,6 +50,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.autosaveName = "UmbrellaStatusItem"
         if let button = item.button {
+            button.imageScaling = .scaleProportionallyUpOrDown
             button.image = MenuBarIcon.image()
             button.title = ""
             button.toolTip = "Umbrella Helper — click for controls, right-click for menu"
@@ -64,6 +65,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(menuItem("Settings…", action: #selector(openSettings)))
+        menu.addItem(menuItem("Check for Updates…", action: #selector(checkForUpdates)))
         menu.addItem(.separator())
         menu.addItem(menuItem("Restart", action: #selector(restartApp)))
 
@@ -77,6 +79,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
+    }
+
+    @objc private func checkForUpdates() {
+        AppUpdateChecker.prompt()
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {

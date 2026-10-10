@@ -75,7 +75,7 @@ struct MenuBarControlsView: View {
                         get: { Double(brightnessFeature.brightness) },
                         set: { brightnessFeature.setBrightness(Float($0), commit: false) }
                     ),
-                    range: 0.05...1.0,
+                    range: Double(UmbrellaBrightnessFeature.minimumBrightness)...1.0,
                     step: Double(UmbrellaBrightnessFeature.brightnessStep),
                     onEditingChanged: { editing in
                         if !editing { brightnessFeature.commitPendingChanges() }

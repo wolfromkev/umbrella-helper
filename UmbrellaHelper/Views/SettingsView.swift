@@ -77,6 +77,15 @@ struct SettingsView: View {
                             AppSettings.shared.launchAtLogin = enabled
                             LaunchAtLoginManager.setEnabled(enabled)
                         }
+
+                    HStack {
+                        Text("Version \(AppUpdateChecker.currentVersion)")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Check for Updates…") {
+                            AppUpdateChecker.prompt()
+                        }
+                    }
                 }
 
                 sectionCard("SimpleSnip") {
@@ -345,7 +354,7 @@ private struct BrightnessTabView: View {
                                 get: { Double(feature.brightness) },
                                 set: { feature.setBrightness(Float($0), commit: false) }
                             ),
-                            in: 0.05...1.0
+                            in: Double(UmbrellaBrightnessFeature.minimumBrightness)...1.0
                         ) { editing in
                             if !editing { feature.commitPendingChanges() }
                         }
@@ -542,7 +551,7 @@ private struct BrightnessTabView: View {
                                             feature.updatePreset(updated)
                                         }
                                     ),
-                                    in: 0.05...1.0
+                                    in: Double(UmbrellaBrightnessFeature.minimumBrightness)...1.0
                                 )
                             }
 
@@ -636,6 +645,41 @@ private struct BrightnessTabView: View {
     }
 }
 
+private final class SnipColorPanelController: NSObject {
+    static let shared = SnipColorPanelController()
+    private var onColor: ((NSColor) -> Void)?
+
+    func show(color: NSColor, onChange: @escaping (NSColor) -> Void) {
+        onColor = onChange
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = color
+        panel.isContinuous = true
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        center(panel)
+        panel.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak self] in
+            self?.center(panel)
+        }
+    }
+
+    @objc private func colorChanged(_ sender: NSColorPanel) {
+        onColor?(sender.color)
+    }
+
+    private func center(_ panel: NSWindow) {
+        let screen = NSApp.keyWindow?.screen ?? NSScreen.main
+        guard let visible = screen?.visibleFrame else { return }
+        var frame = panel.frame
+        frame.origin = NSPoint(
+            x: visible.midX - frame.width / 2,
+            y: visible.midY - frame.height / 2
+        )
+        panel.setFrame(frame, display: true)
+    }
+}
+
 private struct SimpleSnipTabView: View {
     @ObservedObject var feature: UmbrellaSimpleSnipFeature
 
@@ -662,38 +706,6 @@ private struct SimpleSnipTabView: View {
                             Button("Request Access") { feature.requestMicrophonePermission() }
                         }
                         Button("Open Settings") { feature.openMicrophoneSettings() }
-                    }
-
-                    Button("Refresh permission status") {
-                        feature.refreshPermissionState()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-
-                    Text("If prompts keep appearing, grant access in System Settings, then quit and relaunch Umbrella Helper once.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Snips require screen capture only. Microphone applies to recordings when enabled.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                section("Capture") {
-                    HStack(spacing: 8) {
-                        Button("Snip Area") { feature.takeAreaSnip() }
-                        Button("Snip Window") { feature.takeWindowSnip() }
-                        Button("Snip Full Screen") { feature.takeFullScreenSnip() }
-                        Button("Copy Text") { feature.copyTextFromAreaSnip() }
-                    }
-                    HStack(spacing: 8) {
-                        Button(feature.isRecording ? "Stop Recording" : "Record Area") {
-                            feature.toggleRecording()
-                        }
-                        if feature.isRecording {
-                            Text("Recording in progress…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
 
@@ -758,47 +770,10 @@ private struct SimpleSnipTabView: View {
                     ))
                 }
 
-                section("Recent") {
-                    if let last = feature.lastSavedPath {
-                        Text(last)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .foregroundStyle(.secondary)
-                        Button("Reveal Last Capture") {
-                            feature.revealLastSavedItem()
-                        }
-                    } else {
-                        Text("No captures yet.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                section("Debug") {
-                    HStack(spacing: 8) {
-                        Button("Copy log") { feature.copyDebugLog() }
-                            .disabled(feature.debugLog.isEmpty)
-                        Button("Clear") { feature.clearDebugLog() }
-                            .disabled(feature.debugLog.isEmpty)
-                        Spacer()
-                    }
-
-                    if feature.debugLog.isEmpty {
-                        Text("Run a capture/record to see live diagnostics here.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(Array(feature.debugLog.enumerated()), id: \.offset) { _, line in
-                                Text(line)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                                    .lineLimit(2)
-                                    .truncationMode(.middle)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
+                section("Colors") {
+                    snipColorPicker("Screenshot", color: $feature.screenshotSelectionColor)
+                    snipColorPicker("Screen Record", color: $feature.recordingSelectionColor)
+                    snipColorPicker("Text copy", color: $feature.textCopySelectionColor)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -825,6 +800,29 @@ private struct SimpleSnipTabView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(nsColor: NSColor.controlBackgroundColor))
         )
+    }
+
+    private func snipColorPicker(_ title: String, color: Binding<NSColor>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button {
+                SnipColorPanelController.shared.show(color: color.wrappedValue) { picked in
+                    color.wrappedValue = picked.usingColorSpace(.sRGB) ?? picked
+                    feature.saveSettings()
+                }
+            } label: {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color(nsColor: color.wrappedValue))
+                    .frame(width: 44, height: 22)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.25), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title) color")
+        }
     }
 
     private func permissionColor(_ state: UmbrellaPermissionState) -> Color {

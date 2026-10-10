@@ -83,6 +83,7 @@ Umbrella Helper
 
    Then right-click the app and choose Open again.
 5. Grant Screen Recording when asked (and Microphone if you record audio).
+6. Later updates: right-click the menu-bar icon and choose Check for Updates.
 
 Requires macOS 14 or later. No Xcode needed.
 EOF

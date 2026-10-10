@@ -43,11 +43,11 @@ struct UmbrellaSunPreset: Codable, Equatable, Identifiable {
 
 
 private enum UmbrellaBlueLightManager {
-    /// Near-black gamma for Film Mode external displays (true 0 can look odd on some panels).
-    private static let filmModeExternalChannels: (Float, Float, Float) = (0.01, 0.01, 0.01)
+    /// Film Mode floor. Below 10% the pointer is easy to lose on an external display.
+    private static let filmModeExternalChannels: (Float, Float, Float) = (0.10, 0.10, 0.10)
 
     static func apply(colorTemp: Int, brightness: Float, darkroom: Bool, filmMode: Bool) {
-        let dim = max(0.05, min(1, brightness))
+        let dim = max(UmbrellaBrightnessFeature.minimumBrightness, min(1, brightness))
         let channels: (Float, Float, Float)
         if darkroom {
             channels = (0.8 * dim, 0.0, 0.0)
@@ -141,6 +141,7 @@ private enum UmbrellaBlueLightManager {
 
 @MainActor
 final class UmbrellaBrightnessFeature: ObservableObject {
+    static let minimumBrightness: Float = 0.10
     static let brightnessStep: Float = 0.05
     static let colorTempStep: Int = 100
 
@@ -199,7 +200,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
 
     init() {
         let loadedPresets = Self.loadPresets(from: defaults, key: presetKey)
-        brightness = defaults.object(forKey: "umbrella.sunscreen.brightness") as? Float ?? 1.0
+        brightness = Self.clampedBrightness(defaults.object(forKey: "umbrella.sunscreen.brightness") as? Float ?? 1.0)
         colorTemp = defaults.object(forKey: "umbrella.sunscreen.colorTemp") as? Int ?? 6500
         isDarkroom = defaults.object(forKey: "umbrella.sunscreen.darkroom") as? Bool ?? false
         isAutoMode = defaults.object(forKey: "umbrella.sunscreen.auto") as? Bool ?? true
@@ -333,7 +334,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
     /// Updates brightness. Pass `commit: false` while a slider is dragging; call `commitPendingChanges()` on mouse-up.
     func setBrightness(_ value: Float, commit: Bool = true) {
         isAutoMode = false
-        brightness = max(0.05, min(1, value))
+        brightness = Self.clampedBrightness(value)
         isDarkroom = false
         apply(persist: commit, immediate: commit)
     }
@@ -468,7 +469,9 @@ final class UmbrellaBrightnessFeature: ObservableObject {
 
     func updatePreset(_ preset: UmbrellaSunPreset) {
         guard let index = presets.firstIndex(where: { $0.id == preset.id }) else { return }
-        presets[index] = preset
+        var stored = preset
+        stored.brightness = Self.clampedBrightness(preset.brightness)
+        presets[index] = stored
         save()
     }
 
@@ -500,7 +503,7 @@ final class UmbrellaBrightnessFeature: ObservableObject {
 
     func applyPreset(id: String) {
         guard let preset = presets.first(where: { $0.id == id }) else { return }
-        brightness = preset.brightness
+        brightness = Self.clampedBrightness(preset.brightness)
         colorTemp = preset.colorTemp
         isDarkroom = preset.isDarkroom
         isFilmModeEnabled = preset.isFilmMode
@@ -536,15 +539,19 @@ final class UmbrellaBrightnessFeature: ObservableObject {
         )
 
         if progress <= 0.001 {
-            brightness = nightPreset.brightness
+            brightness = Self.clampedBrightness(nightPreset.brightness)
             colorTemp = nightPreset.colorTemp
             isDarkroom = nightPreset.isDarkroom
         } else {
-            brightness = lerp(nightPreset.brightness, dayPreset.brightness, progress)
+            brightness = Self.clampedBrightness(lerp(nightPreset.brightness, dayPreset.brightness, progress))
             colorTemp = lerp(nightPreset.colorTemp, dayPreset.colorTemp, progress)
             isDarkroom = false
         }
         apply(persist: true, immediate: true)
+    }
+
+    private static func clampedBrightness(_ value: Float) -> Float {
+        max(minimumBrightness, min(1, value))
     }
 
     private func lerp(_ start: Float, _ end: Float, _ progress: Float) -> Float {
