@@ -27,53 +27,67 @@ enum IconArtwork {
         context.restoreGState()
     }
 
-    /// Menu-bar mark: the same line-art bulb as the app icon, including the brightness rays.
+    /// Menu-bar mark: a bulb with a pair of scissors. No brightness rays — they crowded the blades at this size.
     static func drawTemplate(into context: CGContext, size: CGFloat) {
         context.setStrokeColor(gray: 0, alpha: 1)
         context.setFillColor(gray: 0, alpha: 1)
         context.setLineCap(.round)
         context.setLineJoin(.round)
 
-        let line = max(1.25, size * 0.058)
+        let line = max(1.05, size * 0.05)
         context.setLineWidth(line)
 
-        let radius = size * 0.29
-        let center = CGPoint(x: size * 0.50, y: size * 0.42)
+        let radius = size * 0.34
+        let center = templateCenter(size: size, radius: radius, line: line)
         let glass = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         context.strokeEllipse(in: glass.insetBy(dx: line / 2, dy: line / 2))
 
-        drawRays(into: context, center: center, radius: radius, line: line, lengthFactor: 0.20)
-        drawMenuBarScissors(into: context, center: center, radius: radius, line: line)
+        drawMenuBarScissors(into: context, center: center, radius: radius)
         drawMenuBarBase(into: context, center: center, radius: radius, line: line)
     }
 
-    /// Blades fill the glass. Only a short stub of each handle continues past the cross.
+    /// Equal space above the glass and below the screw, so the mark sits with the other status icons.
+    private static func templateCenter(size: CGFloat, radius: CGFloat, line: CGFloat) -> CGPoint {
+        let topReach = radius + line * 0.55
+        let bottomReach = radius * 1.18 + line * 0.5
+        return CGPoint(x: size * 0.5, y: (size + topReach - bottomReach) / 2)
+    }
+
+    /// Open blades above two finger holes, drawn thin enough that the holes stay open in the menu bar.
     private static func drawMenuBarScissors(
         into context: CGContext,
         center: CGPoint,
-        radius: CGFloat,
-        line: CGFloat
+        radius: CGFloat
     ) {
-        context.setLineWidth(max(1.2, line * 0.85))
-
-        // Tips sit just inside the glass. Handles end on the bottom of the bulb, above the screw.
-        let tipAngle = CGFloat(36) * .pi / 180
-        let tipDistance = radius - line * 1.15
-        let handleY = center.y + radius - line * 1.65
-        let handleX = max(line * 0.85, radius * 0.10)
+        let pivot = CGPoint(x: center.x, y: center.y - radius * 0.06)
+        let open = CGFloat(42) * .pi / 180
+        let blade = radius * 0.64
+        let bladeWidth = max(1.0, radius * 0.15)
 
         for sign in [-1, 1] as [CGFloat] {
+            context.setLineWidth(bladeWidth)
             let tip = CGPoint(
-                x: center.x + sign * sin(tipAngle) * tipDistance,
-                y: center.y - cos(tipAngle) * tipDistance
+                x: pivot.x + sign * sin(open) * blade,
+                y: pivot.y - cos(open) * blade
             )
-            let handle = CGPoint(
-                x: center.x - sign * handleX,
-                y: handleY
+            let tail = CGPoint(
+                x: pivot.x - sign * sin(open) * radius * 0.18,
+                y: pivot.y + cos(open) * radius * 0.18
             )
             context.move(to: tip)
-            context.addLine(to: handle)
+            context.addLine(to: tail)
             context.strokePath()
+
+            let ringRadius = radius * 0.34
+            let ringStroke = max(0.85, radius * 0.12)
+            let ringCenter = CGPoint(x: center.x - sign * radius * 0.46, y: center.y + radius * 0.38)
+            context.setLineWidth(ringStroke)
+            context.strokeEllipse(in: CGRect(
+                x: ringCenter.x - ringRadius,
+                y: ringCenter.y - ringRadius,
+                width: ringRadius * 2,
+                height: ringRadius * 2
+            ).insetBy(dx: ringStroke / 2, dy: ringStroke / 2))
         }
     }
 
