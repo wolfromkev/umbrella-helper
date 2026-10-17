@@ -322,6 +322,8 @@ private struct BrightnessTabView: View {
     @ObservedObject var feature: UmbrellaBrightnessFeature
     var onPresetsChanged: () -> Void
     @State private var newPresetName = ""
+    @State private var isAdjustingBrightness = false
+    @State private var isAdjustingWarmth = false
 
     var body: some View {
         ScrollView {
@@ -354,10 +356,14 @@ private struct BrightnessTabView: View {
                         Slider(
                             value: Binding(
                                 get: { Double(feature.brightness) },
-                                set: { feature.setBrightness(Float($0), commit: false) }
+                                set: { newValue in
+                                    guard isAdjustingBrightness else { return }
+                                    feature.setBrightness(Float(newValue), commit: false)
+                                }
                             ),
                             in: Double(UmbrellaBrightnessFeature.minimumBrightness)...1.0
                         ) { editing in
+                            isAdjustingBrightness = editing
                             if !editing { feature.commitPendingChanges() }
                         }
                         .disabled(feature.isAutoMode)
@@ -368,11 +374,15 @@ private struct BrightnessTabView: View {
                         Slider(
                             value: Binding(
                                 get: { Double(feature.colorTemp) },
-                                set: { feature.setColorTemp(Int($0), commit: false) }
+                                set: { newValue in
+                                    guard isAdjustingWarmth else { return }
+                                    feature.setColorTemp(Int(newValue), commit: false)
+                                }
                             ),
                             in: 1200...6500,
                             step: Double(UmbrellaBrightnessFeature.colorTempStep)
                         ) { editing in
+                            isAdjustingWarmth = editing
                             if !editing { feature.commitPendingChanges() }
                         }
                         .disabled(feature.isAutoMode || feature.isDarkroom)

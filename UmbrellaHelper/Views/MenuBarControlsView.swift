@@ -14,6 +14,9 @@ struct MenuBarControlsView: View {
 
     @State private var focusedControl: MenuBarControlTarget = .screenBrightness
     @State private var scrollCarry: CGFloat = 0
+    /// SwiftUI can write a slider's range minimum when the menu closes. Only accept values while the user is dragging.
+    @State private var isAdjustingBrightness = false
+    @State private var isAdjustingWarmth = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -73,11 +76,15 @@ struct MenuBarControlsView: View {
                     valueText: "\(Int((brightnessFeature.brightness * 100).rounded()))%",
                     value: Binding(
                         get: { Double(brightnessFeature.brightness) },
-                        set: { brightnessFeature.setBrightness(Float($0), commit: false) }
+                        set: { newValue in
+                            guard isAdjustingBrightness else { return }
+                            brightnessFeature.setBrightness(Float(newValue), commit: false)
+                        }
                     ),
                     range: Double(UmbrellaBrightnessFeature.minimumBrightness)...1.0,
                     step: Double(UmbrellaBrightnessFeature.brightnessStep),
                     onEditingChanged: { editing in
+                        isAdjustingBrightness = editing
                         if !editing { brightnessFeature.commitPendingChanges() }
                     }
                 )
@@ -90,12 +97,16 @@ struct MenuBarControlsView: View {
                         : "\(brightnessFeature.colorTemp)K",
                     value: Binding(
                         get: { Double(brightnessFeature.colorTemp) },
-                        set: { brightnessFeature.setColorTemp(Int($0.rounded()), commit: false) }
+                        set: { newValue in
+                            guard isAdjustingWarmth else { return }
+                            brightnessFeature.setColorTemp(Int(newValue.rounded()), commit: false)
+                        }
                     ),
                     range: 1200...6500,
                     step: Double(UmbrellaBrightnessFeature.colorTempStep),
                     enabled: !brightnessFeature.isDarkroom,
                     onEditingChanged: { editing in
+                        isAdjustingWarmth = editing
                         if !editing { brightnessFeature.commitPendingChanges() }
                     }
                 )
@@ -112,24 +123,24 @@ struct MenuBarControlsView: View {
             Divider()
 
             sectionHeader("SimpleSnip", systemImage: "record.circle") {
-                captureRow("Snip area", shortcut: AppSettings.shared.snipAreaHotKey.displayName) {
-                    snipFeature.takeAreaSnip()
+                CaptureMenuRow(title: "Snip area", shortcut: AppSettings.shared.snipAreaHotKey.displayName) {
+                    onRunCapture(snipFeature.takeAreaSnip)
                 }
-                captureRow("Snip window", shortcut: AppSettings.shared.snipWindowHotKey.displayName) {
-                    snipFeature.takeWindowSnip()
+                CaptureMenuRow(title: "Snip window", shortcut: AppSettings.shared.snipWindowHotKey.displayName) {
+                    onRunCapture(snipFeature.takeWindowSnip)
                 }
-                captureRow("Snip full screen", shortcut: AppSettings.shared.snipFullScreenHotKey.displayName) {
-                    snipFeature.takeFullScreenSnip()
+                CaptureMenuRow(title: "Snip full screen", shortcut: AppSettings.shared.snipFullScreenHotKey.displayName) {
+                    onRunCapture(snipFeature.takeFullScreenSnip)
                 }
-                captureRow("Copy text", shortcut: AppSettings.shared.snipTextHotKey.displayName) {
-                    snipFeature.copyTextFromAreaSnip()
+                CaptureMenuRow(title: "Copy text", shortcut: AppSettings.shared.snipTextHotKey.displayName) {
+                    onRunCapture(snipFeature.copyTextFromAreaSnip)
                 }
-                captureRow(
-                    snipFeature.isRecording ? "Stop recording" : "Record area",
+                CaptureMenuRow(
+                    title: snipFeature.isRecording ? "Stop recording" : "Record area",
                     shortcut: AppSettings.shared.snipRecordHotKey.displayName,
                     emphasized: snipFeature.isRecording
                 ) {
-                    snipFeature.toggleRecording()
+                    onRunCapture(snipFeature.toggleRecording)
                 }
             }
 
@@ -175,28 +186,51 @@ struct MenuBarControlsView: View {
         }
     }
 
-    private func captureRow(
-        _ title: String,
-        shortcut: String,
-        emphasized: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            onRunCapture(action)
-        } label: {
-            HStack(spacing: 8) {
-                Text(title)
-                Spacer(minLength: 8)
-                Text(shortcut)
-                    .foregroundStyle(emphasized ? Color.red.opacity(0.85) : Color.secondary)
+    private struct CaptureMenuRow: View {
+        let title: String
+        let shortcut: String
+        var emphasized: Bool = false
+        let action: () -> Void
+
+        @State private var isHovered = false
+
+        var body: some View {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Text(title)
+                    Spacer(minLength: 8)
+                    Text(shortcut)
+                        .foregroundStyle(shortcutColor)
+                }
+                .font(.caption)
+                .foregroundStyle(titleColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isHovered ? Color(nsColor: .selectedContentBackgroundColor) : Color.clear)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.08)) {
+                        isHovered = hovering
+                    }
+                }
             }
-            .font(.caption)
-            .foregroundStyle(emphasized ? Color.red : Color.primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help("\(title) — \(shortcut)")
         }
-        .buttonStyle(.plain)
-        .help("\(title) — \(shortcut)")
+
+        private var titleColor: Color {
+            if isHovered { return Color(nsColor: .selectedMenuItemTextColor) }
+            return emphasized ? .red : .primary
+        }
+
+        private var shortcutColor: Color {
+            if isHovered { return Color(nsColor: .selectedMenuItemTextColor).opacity(0.85) }
+            return emphasized ? Color.red.opacity(0.85) : .secondary
+        }
     }
 
     private func presetHelp(_ preset: UmbrellaSunPreset) -> String {
@@ -375,19 +409,36 @@ private struct MenuBarControlsEventCatcher: NSViewRepresentable {
 private final class MenuBarControlsKeyView: NSView {
     var handler: ((NSEvent) -> Bool)?
     private var localMonitor: Any?
+    private var windowObservers: [NSObjectProtocol] = []
 
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil {
+        removeWindowObservers()
+        guard let window else {
+            removeMonitor()
+            return
+        }
+
+        let center = NotificationCenter.default
+        windowObservers = [
+            center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
+                self?.installMonitorIfNeeded()
+            },
+            center.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
+                self?.removeMonitor()
+            },
+            center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+                self?.removeMonitor()
+            },
+        ]
+
+        if window.isKeyWindow {
             installMonitorIfNeeded()
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.window?.makeFirstResponder(self)
+                self?.window?.makeFirstResponder(self)
             }
-        } else {
-            removeMonitor()
         }
     }
 
@@ -397,9 +448,11 @@ private final class MenuBarControlsKeyView: NSView {
     }
 
     private func installMonitorIfNeeded() {
-        guard localMonitor == nil else { return }
+        guard localMonitor == nil, window?.isKeyWindow == true else { return }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .scrollWheel]) { [weak self] event in
-            guard let self, let handler = self.handler else { return event }
+            // Local monitors see events whenever the app is active, including during a snip.
+            // Arrow keys and side-scroll must not change brightness unless this menu is key.
+            guard let self, self.window?.isKeyWindow == true, let handler = self.handler else { return event }
             return handler(event) ? nil : event
         }
     }
@@ -411,9 +464,14 @@ private final class MenuBarControlsKeyView: NSView {
         }
     }
 
+    private func removeWindowObservers() {
+        let center = NotificationCenter.default
+        windowObservers.forEach { center.removeObserver($0) }
+        windowObservers.removeAll()
+    }
+
     deinit {
-        if let localMonitor {
-            NSEvent.removeMonitor(localMonitor)
-        }
+        removeMonitor()
+        removeWindowObservers()
     }
 }
