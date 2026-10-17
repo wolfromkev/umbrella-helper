@@ -164,7 +164,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         let content = makeControlsView(appModel: appModel)
 
         let hosting = NSHostingController(rootView: content)
-        hosting.sizingOptions = [.intrinsicContentSize]
+        // Let the SwiftUI layout decide the height so the pinned Settings row is included.
+        hosting.sizingOptions = [.preferredContentSize]
 
         let popover = NSPopover()
         popover.contentViewController = hosting

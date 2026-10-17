@@ -19,6 +19,41 @@ struct MenuBarControlsView: View {
     @State private var isAdjustingWarmth = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                menuSections
+                    .padding(14)
+            }
+            .frame(maxHeight: 460)
+
+            Divider()
+
+            HStack(alignment: .firstTextBaseline) {
+                Button(action: onOpenSettings) {
+                    Label("Settings…", systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .controlSize(.small)
+
+                Spacer()
+
+                Text("← → or side-scroll")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+        .frame(width: 280)
+        .background(
+            MenuBarControlsEventCatcher { event in
+                handleControlEvent(event)
+            }
+        )
+    }
+
+    private var menuSections: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader("Screen", systemImage: "sun.max.fill") {
                 Toggle(
@@ -143,31 +178,7 @@ struct MenuBarControlsView: View {
                     onRunCapture(snipFeature.toggleRecording)
                 }
             }
-
-            Divider()
-
-            HStack(alignment: .firstTextBaseline) {
-                Button(action: onOpenSettings) {
-                    Label("Settings…", systemImage: "gearshape")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .controlSize(.small)
-
-                Spacer()
-
-                Text("← → or side-scroll")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
         }
-        .padding(14)
-        .frame(width: 280)
-        .background(
-            MenuBarControlsEventCatcher { event in
-                handleControlEvent(event)
-            }
-        )
     }
 
     @ViewBuilder

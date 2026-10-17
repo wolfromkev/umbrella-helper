@@ -497,9 +497,10 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                 self.copyImageToClipboardAsync(from: output) { [weak self] copied in
                     guard let self else { return }
                     self.logDebug("snip clipboard copy: \(copied ? "ok" : "FAILED")")
+                    let name = (output as NSString).lastPathComponent
                     self.postNotification(
                         title: "Umbrella Helper",
-                        body: "Saved \((output as NSString).lastPathComponent) and copied to clipboard"
+                        body: copied ? "Saved \(name) and copied to clipboard" : "Saved \(name)"
                     )
                     if self.revealScreenshotInFinder {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: output)])
@@ -624,9 +625,10 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
                     self.defaults.set(outputPath, forKey: "umbrella.snip.lastSavedPath")
                     let copied = self.copyImageToClipboard(from: outputPath)
                     self.logDebug("snip clipboard copy: \(copied ? "ok" : "FAILED")")
+                    let name = (outputPath as NSString).lastPathComponent
                     self.postNotification(
                         title: "Umbrella Helper",
-                        body: "Saved \((outputPath as NSString).lastPathComponent) and copied to clipboard"
+                        body: copied ? "Saved \(name) and copied to clipboard" : "Saved \(name)"
                     )
                     if reveal {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: outputPath)])
@@ -763,26 +765,62 @@ final class UmbrellaSimpleSnipFeature: ObservableObject {
 
     @discardableResult
     private func copyImageToClipboard(from path: String) -> Bool {
-        guard let image = NSImage(contentsOfFile: path) else { return false }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        return pasteboard.writeObjects([image])
+        guard let image = Self.clipboardImage(at: path) else { return false }
+        return Self.writeClipboardImage(image)
     }
 
-    /// Load image off the main thread, then write the pasteboard on the main actor.
+    /// Decode off the main thread, then place concrete image bytes on the pasteboard.
     private func copyImageToClipboardAsync(from path: String, completion: @escaping (Bool) -> Void) {
         Task.detached(priority: .userInitiated) {
-            let image = NSImage(contentsOfFile: path)
+            let image = Self.clipboardImage(at: path)
             await MainActor.run {
                 guard let image else {
                     completion(false)
                     return
                 }
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                completion(pasteboard.writeObjects([image]))
+                completion(Self.writeClipboardImage(image))
             }
         }
+    }
+
+    private struct ClipboardImage: Sendable {
+        var png: Data
+        var tiff: Data?
+    }
+
+    /// PNG plus TIFF, encoded immediately. `NSImage` pasteboard writes are only a
+    /// promise, and this menu-bar app is not around to fulfill it when another app pastes.
+    nonisolated private static func clipboardImage(at path: String) -> ClipboardImage? {
+        let url = URL(fileURLWithPath: path) as CFURL
+        guard let source = CGImageSourceCreateWithURL(url, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let png = encodedImageData(image, type: "public.png") else { return nil }
+        return ClipboardImage(png: png, tiff: encodedImageData(image, type: "public.tiff"))
+    }
+
+    nonisolated private static func encodedImageData(_ image: CGImage, type: String) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, type as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
+    }
+
+    @MainActor
+    private static func writeClipboardImage(_ image: ClipboardImage) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        var types: [NSPasteboard.PasteboardType] = [.png]
+        if image.tiff != nil {
+            types.append(.tiff)
+        }
+        // owner: nil copies the bytes into the pasteboard server instead of leaving a lazy promise.
+        pasteboard.declareTypes(types, owner: nil)
+        guard pasteboard.setData(image.png, forType: .png) else { return false }
+        if let tiff = image.tiff {
+            pasteboard.setData(tiff, forType: .tiff)
+        }
+        return true
     }
 
     private func extractTextToClipboard(from path: String) {
@@ -1450,15 +1488,17 @@ enum UmbrellaRecordingSoundFeedback {
     static func playStop() { NSSound(named: NSSound.Name("Bottle"))?.play() }
 }
 
-/// Hide selection chrome without redrawing it. A display pass after mouse-up was filling the whole screen with the dim veil.
+/// Hide the veil immediately, but do not close the windows inside the mouse-tracking
+/// callback. Closing them there frees AppKit objects the event loop still holds.
 private func dismissOverlayWindows(_ windows: [NSWindow]) {
     for window in windows {
         window.ignoresMouseEvents = true
         window.alphaValue = 0
-        window.orderOut(nil)
     }
     DispatchQueue.main.async {
-        windows.forEach { $0.close() }
+        for window in windows {
+            window.orderOut(nil)
+        }
     }
 }
 

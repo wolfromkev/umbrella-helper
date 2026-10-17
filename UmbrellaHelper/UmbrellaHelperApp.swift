@@ -43,7 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func dismissAutoOpenedSettingsWindows() {
         DispatchQueue.main.async {
-            for window in NSApp.windows where window.canBecomeKey {
+            // Only the empty SwiftUI Settings scene. Closing every key window
+            // also hid the menu-bar item and its Settings control.
+            for window in NSApp.windows where window.title == "Settings" {
                 window.orderOut(nil)
             }
         }
